@@ -1,0 +1,54 @@
+# Packaged builds. Deliberately at the top of the tree rather than inside a
+# build directory: an archive you are about to send someone should be somewhere
+# you can see it.
+dist/
+
+# Build trees
+build/
+build-*/
+cmake-build-*/
+out/
+_deps/
+CMakeUserPresets.json
+
+# Working directory for archives dropped in from elsewhere, backups taken
+# before applying them, and the out-of-tree build trees. Nothing in here is
+# source; it is measured in gigabytes.
+.incoming/
+
+# The generated build stamp lives in the build tree, but keep it out by name in
+# case someone configures in place.
+build_info.hpp
+
+# Editors and tooling
+.idea/
+.vscode/
+.cache/
+compile_commands.json
+*.swp
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+._*
+
+# Vendor manuals in every form: the PDFs and compiled help they came as, and
+# the markdown they were converted to. Bizerba's documentation is Bizerba's,
+# and this repository is public.
+#
+# The tooling does read docs/markdown/ -- gen_registry.py generates the token
+# table from GxNet.md -- so keep a copy locally. What survives here instead is
+# docs/*-notes.md, which cites the originals by symbolic name, subfunction code
+# and quote precisely so that they can be searched without being shipped.
+docs/original/
+docs/Help/
+docs/markdown/
+# Vendor sample code and templates: C++/C# examples, Excel macros, SAP
+# transports, XML file-interface samples. Third-party source, and the facts
+# worth keeping out of it are recorded in the code and the notes instead.
+docs/Samples/
+
+# Captures and logs pulled off the server while debugging
+*.commlog
+*.log

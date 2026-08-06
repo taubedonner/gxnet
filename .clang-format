@@ -1,0 +1,35 @@
+# Close to the style the code was already written in, so applying it is a
+# tidy-up rather than a rewrite.
+---
+Language: Cpp
+BasedOnStyle: Google
+
+ColumnLimit: 120
+IndentWidth: 4
+AccessModifierOffset: -4
+ContinuationIndentWidth: 4
+
+PointerAlignment: Left
+DerivePointerAlignment: false
+
+# The comments are prose and they are wrapped deliberately: several of them are
+# tables, wire dumps or quoted server messages that mean nothing rewrapped.
+ReflowComments: false
+
+# Same reasoning for strings: the multi-line messages are wrapped where the
+# sentence wraps. Left to itself clang-format re-splits them mid-phrase, which
+# is harmless to the compiler and unreadable to a person.
+BreakStringLiterals: false
+
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
+
+# Project headers first is Google's order, but the library's own headers are
+# not "related to this file" in the way Google means, so keep the grouping the
+# code already uses: <system>, then "gxnet/...", then local.
+IncludeBlocks: Preserve
+SortIncludes: CaseSensitive
+
+SpaceAfterTemplateKeyword: false
