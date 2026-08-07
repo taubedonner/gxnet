@@ -20,7 +20,7 @@ jobs:
           - name: msvc
             preset: ""
           - name: msvc + asan
-            preset: "-DCMAKE_CXX_FLAGS=/fsanitize=address"
+            preset: "-DGXNET_SANITIZE=address"
     steps:
       - uses: actions/checkout@v4
 

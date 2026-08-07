@@ -16,22 +16,30 @@ option(GXNET_BUILD_APP "Build the gxdemo application (fetches wxWidgets)" OFF)
 #
 # Semicolon-separated, passed straight to -fsanitize: "address;undefined" is the
 # usual pair, "thread" has to be built on its own because it cannot be combined
-# with address. Clang and GCC only -- MSVC has /fsanitize=address and no
-# undefined-behaviour sanitizer, and the flag spelling differs, so this refuses
-# rather than silently doing nothing.
+# with address. MSVC accepts "address" alone: it has no UndefinedBehaviorSanitizer
+# and no ThreadSanitizer, so anything else is refused rather than silently doing
+# nothing.
 set(GXNET_SANITIZE "" CACHE STRING "Sanitizers to build with, e.g. address;undefined")
 
 if(GXNET_SANITIZE)
     if(MSVC)
-        message(FATAL_ERROR "GXNET_SANITIZE is for Clang and GCC; MSVC spells it /fsanitize=address")
+        # MSVC has AddressSanitizer and nothing else: no UBSan, no TSan. Its
+        # flag is also spelled differently, and it must be added rather than
+        # replacing CMAKE_CXX_FLAGS, or /EHsc goes with it and every throw
+        # becomes a warning and then a crash.
+        if(NOT GXNET_SANITIZE STREQUAL "address")
+            message(FATAL_ERROR "MSVC supports only GXNET_SANITIZE=address")
+        endif()
+        add_compile_options(/fsanitize=address /Zi)
+    else()
+        string(REPLACE ";" "," _gxnet_sanitize "${GXNET_SANITIZE}")
+        # -fno-omit-frame-pointer for readable stacks, -g so they carry line
+        # numbers even in a release build, and the flags go to the linker too:
+        # a sanitized object linked without them fails at run time, not at link.
+        add_compile_options(-fsanitize=${_gxnet_sanitize} -fno-omit-frame-pointer -g)
+        add_link_options(-fsanitize=${_gxnet_sanitize})
     endif()
-    string(REPLACE ";" "," _gxnet_sanitize "${GXNET_SANITIZE}")
-    # -fno-omit-frame-pointer for readable stacks, -g so they carry line
-    # numbers even in a release build, and the flags go to the linker too:
-    # a sanitized object linked without them fails at run time, not at link.
-    add_compile_options(-fsanitize=${_gxnet_sanitize} -fno-omit-frame-pointer -g)
-    add_link_options(-fsanitize=${_gxnet_sanitize})
-    message(STATUS "gxnet: sanitizers ${_gxnet_sanitize}")
+    message(STATUS "gxnet: sanitizers ${GXNET_SANITIZE}")
 endif()
 
 # One directory per component, each with its own include/ and src/. The library
