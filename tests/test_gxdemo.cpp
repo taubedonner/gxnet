@@ -268,7 +268,15 @@ void testSoak() {
     group("soak");
 
     int cycles = 60;
-    if (const char* env = std::getenv("GXNET_SOAK_CYCLES")) {
+#ifdef _MSC_VER
+    // getenv is deprecated by MSVC rather than unsafe here: the result is read
+    // immediately and never stored.
+#pragma warning(suppress : 4996)
+    const char* env = std::getenv("GXNET_SOAK_CYCLES");
+#else
+    const char* env = std::getenv("GXNET_SOAK_CYCLES");
+#endif
+    if (env != nullptr) {
         const int wanted = std::atoi(env);
         if (wanted > 0) cycles = wanted;
     }

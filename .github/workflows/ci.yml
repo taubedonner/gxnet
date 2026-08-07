@@ -14,27 +14,27 @@ jobs:
     name: windows / ${{ matrix.name }}
     runs-on: windows-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: msvc
-            preset: ""
-          - name: msvc + asan
-            preset: "-DGXNET_SANITIZE=address"
     steps:
       - uses: actions/checkout@v5
 
       - name: Configure
-        run: >
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
-          ${{ matrix.preset }}
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
       - name: Build
         run: cmake --build build --config RelWithDebInfo -j
 
       - name: Test
         run: ctest --test-dir build -C RelWithDebInfo --output-on-failure
+
+  # No MSVC AddressSanitizer job, and that is a decision rather than an
+  # omission. The only Windows-specific code is the COM transport, and no
+  # runner has a device or a _connect.BRAIN to exercise it -- so a sanitized
+  # MSVC build would run exactly the portable code the Linux jobs already
+  # sanitize, on a slower runner, and needs the ASan runtime DLL on PATH or the
+  # test process hangs waiting on a dialog nobody can dismiss.
+  #
+  # What the MSVC job above is for is the compiler: it is the one that catches
+  # things clang accepts, such as windows.h defining min and max as macros.
 
   windows-mingw:
     name: windows / llvm-mingw cross-check
