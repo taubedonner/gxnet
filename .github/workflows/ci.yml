@@ -1,0 +1,106 @@
+name: ci
+
+# Windows first, because that is where this runs in earnest: the BCS transport
+# is Windows-only and so is the machine it talks to. Linux is here for one
+# reason, LeakSanitizer, which exists nowhere else.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    name: windows / ${{ matrix.name }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: msvc
+            preset: ""
+          - name: msvc + asan
+            preset: "-DCMAKE_CXX_FLAGS=/fsanitize=address"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          ${{ matrix.preset }}
+
+      - name: Build
+        run: cmake --build build --config RelWithDebInfo -j
+
+      - name: Test
+        run: ctest --test-dir build -C RelWithDebInfo --output-on-failure
+
+  windows-mingw:
+    name: windows / llvm-mingw cross-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch llvm-mingw
+        run: |
+          curl -sSL -o llvm-mingw.tar.xz \
+            https://github.com/mstorsjo/llvm-mingw/releases/download/20240619/llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64.tar.xz
+          tar xf llvm-mingw.tar.xz
+          echo "LLVM_MINGW_ROOT=$PWD/llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64" >> "$GITHUB_ENV"
+
+      # Cross-compiles only. The result cannot be run here, and that is the
+      # point: this job exists to catch the toolchain breaking, not to test.
+      - name: Configure and build
+        run: |
+          cmake -S . -B build-win -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_TOOLCHAIN_FILE=app/cmake/llvm-mingw-x86_64.toolchain.cmake
+          cmake --build build-win -j
+
+  linux-sanitizers:
+    name: linux / ${{ matrix.sanitize }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitize: ["address;undefined", "thread"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+          -DGXNET_SANITIZE="${{ matrix.sanitize }}"
+
+      - name: Build
+        run: cmake --build build -j
+
+      # detect_leaks is on by default under ASan on Linux and is the only
+      # platform that has it at all: not macOS, and not Windows in any
+      # toolchain. Halting on the first error keeps a failure readable.
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+          GXNET_SOAK_CYCLES: 200
+        run: ctest --test-dir build --output-on-failure
+
+  soak:
+    name: linux / long soak
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure and build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DGXNET_SANITIZE="address"
+          cmake --build build -j
+
+      # What a unit test cannot see: a service left running for months. The
+      # assertions are on the containers rather than on resident size, because
+      # an allocator claims arenas and keeps them -- RSS rises and plateaus even
+      # when nothing leaks.
+      - name: Soak
+        env:
+          ASAN_OPTIONS: detect_leaks=1
+          GXNET_SOAK_CYCLES: 5000
+        run: ./build/gxdemo_tests

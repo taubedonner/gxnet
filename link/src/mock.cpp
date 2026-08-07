@@ -40,31 +40,47 @@ std::vector<std::pair<Token, Value>> payloadPairs(const Telegram& telegram) {
 
 }  // namespace
 
-void MockTransport::set(Token token, Value value) { values_[token] = std::move(value); }
+void MockTransport::set(Token token, Value value) {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    values_[token] = std::move(value);
+}
 
 std::optional<Value> MockTransport::get(Token token) const {
+    const std::lock_guard<std::mutex> lock(mutex_);
     const auto it = values_.find(token);
     if (it == values_.end()) return std::nullopt;
     return it->second;
 }
 
 void MockTransport::seedFrom(const Telegram& telegram) {
+    const std::lock_guard<std::mutex> lock(mutex_);
     for (auto& [token, value] : payloadPairs(telegram)) {
         if (!isEmpty(value)) values_[token] = std::move(value);
     }
 }
 
-void MockTransport::handle(Token token, Handler handler) { handlers_[token] = std::move(handler); }
+void MockTransport::handle(Token token, Handler handler) {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    handlers_[token] = std::move(handler);
+}
 
 void MockTransport::replay(std::string header_line, std::vector<std::string> reply_lines) {
+    const std::lock_guard<std::mutex> lock(mutex_);
     replays_[std::move(header_line)] = std::move(reply_lines);
 }
 
-void MockTransport::failNext(LinkError error) { fail_next_ = std::move(error); }
+void MockTransport::failNext(LinkError error) {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    fail_next_ = std::move(error);
+}
 
-void MockTransport::timeoutNext() { timeout_next_ = true; }
+void MockTransport::timeoutNext() {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    timeout_next_ = true;
+}
 
 void MockTransport::postSpontaneous(std::vector<std::string> lines) {
+    const std::lock_guard<std::mutex> lock(mutex_);
     if (lines.empty()) return;
     spontaneous_.push_back(std::move(lines));
 }
@@ -72,10 +88,11 @@ void MockTransport::postSpontaneous(std::vector<std::string> lines) {
 void MockTransport::postSpontaneous(const Telegram& telegram) {
     auto line = encodeOneLine(telegram);
     if (!line) return;
-    spontaneous_.push_back({*line});
+    postSpontaneous(std::vector<std::string>{*line});
 }
 
 LinkResult<Exchange> MockTransport::receiveSpontaneous(const std::string& queue, std::chrono::milliseconds timeout) {
+    const std::lock_guard<std::mutex> lock(mutex_);
     (void)queue;
     (void)timeout;
 
@@ -110,13 +127,40 @@ LinkResult<Exchange> MockTransport::receiveSpontaneous(const std::string& queue,
     return LinkResult<Exchange>::of(std::move(exchange));
 }
 
+std::vector<std::string> MockTransport::sent() const {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    return sent_;
+}
+
+std::vector<Request> MockTransport::requests() const {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    return requests_;
+}
+
+std::vector<std::pair<Token, Value>> MockTransport::writes() const {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    return writes_;
+}
+
+std::size_t MockTransport::spontaneousPending() const {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    return spontaneous_.size();
+}
+
+bool MockTransport::isOpen() const {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    return open_;
+}
+
 void MockTransport::clearHistory() {
+    const std::lock_guard<std::mutex> lock(mutex_);
     sent_.clear();
     requests_.clear();
     writes_.clear();
 }
 
 LinkError MockTransport::open(const Endpoint& endpoint) {
+    const std::lock_guard<std::mutex> lock(mutex_);
     if (endpoint.device.empty()) {
         return {0, "no device name given"};
     }
@@ -125,14 +169,19 @@ LinkError MockTransport::open(const Endpoint& endpoint) {
     return {};
 }
 
-void MockTransport::close() { open_ = false; }
+void MockTransport::close() {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    open_ = false;
+}
 
 std::string MockTransport::description() const {
+    const std::lock_guard<std::mutex> lock(mutex_);
     if (!open_) return options_.device_description + " (closed)";
     return options_.device_description + " [" + endpoint_.device + "]";
 }
 
 LinkResult<Exchange> MockTransport::execute(const Request& request) {
+    const std::lock_guard<std::mutex> lock(mutex_);
     if (!open_) {
         return LinkResult<Exchange>::fail({0, "transport is not open"});
     }

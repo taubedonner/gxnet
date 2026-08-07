@@ -4,6 +4,7 @@
 
 #include <deque>
 #include <functional>
+#include <mutex>
 #include <map>
 #include <string>
 #include <vector>
@@ -28,6 +29,12 @@ namespace gxnet::link {
 ///   * Invent values. A read of a token that was never seeded and never written
 ///     fails, rather than returning a plausible zero. A gap that shows up as an
 ///     error in a test is worth more than one papered over with a default.
+///
+/// Unlike the transports it stands in for, this one **is** thread safe. Its
+/// seeding and inspection methods are called from whichever thread is driving
+/// the test or the bench, while the transport itself is driven from the worker
+/// thread, and both touch the same model. A single mutex covers the model, the
+/// spontaneous queue and the history.
 ///
 /// The one assumption it does make is recorded at `Options::echo_header`: that
 /// a read is answered by the requested header plus the data. That follows the
@@ -97,17 +104,20 @@ public:
     /// The same from a telegram, encoded the way the server hands answers back:
     /// one interleaved line, values following their tokens.
     void postSpontaneous(const Telegram& telegram);
-    [[nodiscard]] std::size_t spontaneousPending() const { return spontaneous_.size(); }
+    [[nodiscard]] std::size_t spontaneousPending() const;
 
     // --- inspection -------------------------------------------------------
 
+    /// Copies rather than references, because the worker thread appends to
+    /// these while a test reads them.
+    ///
     /// Every line handed to the transport, in order.
-    [[nodiscard]] const std::vector<std::string>& sent() const { return sent_; }
+    [[nodiscard]] std::vector<std::string> sent() const;
     /// Every request, parsed, in order.
-    [[nodiscard]] const std::vector<Request>& requests() const { return requests_; }
-    /// Tokens written to, in order, with duplicates -- the write history is
-    /// what a sequence test asserts against.
-    [[nodiscard]] const std::vector<std::pair<Token, Value>>& writes() const { return writes_; }
+    [[nodiscard]] std::vector<Request> requests() const;
+    /// Tokens written to, in order, with duplicates: the write history is what
+    /// a sequence test asserts against.
+    [[nodiscard]] std::vector<std::pair<Token, Value>> writes() const;
     void clearHistory();
 
     [[nodiscard]] Options& options() { return options_; }
@@ -116,7 +126,7 @@ public:
 
     LinkError open(const Endpoint& endpoint) override;
     void close() override;
-    [[nodiscard]] bool isOpen() const override { return open_; }
+    [[nodiscard]] bool isOpen() const override;
     LinkResult<Exchange> execute(const Request& request) override;
     LinkResult<Exchange> receiveSpontaneous(const std::string& queue, std::chrono::milliseconds timeout) override;
     [[nodiscard]] std::optional<TextMode> textMode() const override { return options_.text_mode; }
@@ -142,6 +152,8 @@ private:
     bool timeout_next_ = false;
 
     std::deque<std::vector<std::string>> spontaneous_;
+
+    mutable std::mutex mutex_;
 };
 
 }  // namespace gxnet::link

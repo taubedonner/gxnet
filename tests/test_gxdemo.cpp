@@ -11,7 +11,9 @@
 //
 // The panels are not covered here. They need a running wxApp, which is a
 // separate target with a separate set of problems.
+#include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -55,11 +57,14 @@ void checkEq(const A& actual, const B& expected, const std::string& what) {
 /// Everything in Session is delivered from `update()`, which is normally a
 /// timer tick. Here it is a loop with a ceiling, so a callback that never fires
 /// fails the test instead of hanging the suite.
-bool pump(Session& session, const std::function<bool()>& done, int max_ticks = 2000) {
+bool pump(Session& session, const std::function<bool()>& done, int max_ticks = 40000) {
     for (int tick = 0; tick < max_ticks; ++tick) {
         session.update();
         if (done()) return true;
-        std::this_thread::sleep_for(std::chrono::milliseconds{1});
+        // Yield rather than sleep. The transport is a thread away, not a
+        // network away, and a millisecond of sleep per tick turns a soak of a
+        // few hundred cycles into minutes of waiting on nothing.
+        std::this_thread::yield();
     }
     session.update();
     return done();
@@ -76,20 +81,18 @@ Session::Settings mockSettings() {
 /// A connected session on the in-memory device, with the version seeded so the
 /// firmware gate has something to compare against.
 ///
-/// Seeded *before* connecting: Session reads SRT_GX_VERSION itself as soon as
-/// the connection opens, and a mock that cannot answer would leave the version
-/// unknown -- which is the case where the gate deliberately does nothing.
+/// The seeding happens between `connect()` and the first `update()`, and the
+/// gap matters. `connect()` builds the transport and queues the open; the
+/// version read is queued later still, by the open's own completion, which runs
+/// on a call to `update()`. Seeding here therefore always precedes the read.
+/// Seeding after a pump does not: the read may already have run and found
+/// nothing, and Session does not ask twice.
 bool connectMock(Session& session, const std::string& version) {
     session.settings() = mockSettings();
     session.connect();
-    if (!pump(session, [&] { return session.mock() != nullptr && session.connected(); })) return false;
+    if (session.mock() == nullptr) return false;
     session.mock()->set("ST8D"_tok, Value{version});
-    // Reconnect so the version read happens against the seeded device.
-    session.disconnect();
-    session.connect();
-    if (!pump(session, [&] { return session.connected(); })) return false;
-    session.mock()->set("ST8D"_tok, Value{version});
-    return pump(session, [&] { return session.deviceVersion().has_value(); });
+    return pump(session, [&] { return session.connected() && session.deviceVersion().has_value(); });
 }
 
 // --- tests ----------------------------------------------------------------
@@ -174,9 +177,9 @@ void testSpontaneousDelivery() {
     session.unlisten(token);
     seen.clear();
     session.mock()->postSpontaneous({"A!WV05|WW06|3|LX02"});
-    pump(session, [&] { return false; }, 40);
-    check(seen.empty(), "an unsubscribed listener hears nothing");
-    check(session.spontaneousCount() == 2, "though the record was still collected and logged");
+    check(pump(session, [&] { return session.spontaneousCount() == 2; }),
+          "a record posted after unsubscribing is still collected and logged");
+    check(seen.empty(), "but the unsubscribed listener does not hear it");
 }
 
 void testLogAnnotations() {
@@ -236,6 +239,73 @@ void testDescribeTelegram() {
     check(tokenDescription("WW62"_tok).empty(), "and one the reference does not name says nothing");
 }
 
+/// Connect, work, disconnect, repeatedly, and watch what does not come back.
+///
+/// The failure this exists for is the one a unit test cannot see: a service
+/// left running for months. Anything that grows once per cycle is invisible in
+/// a single pass and fatal in a hundred thousand of them.
+///
+/// It asserts on the containers rather than on process memory, because resident
+/// size is the wrong measurement -- an allocator claims arenas and keeps them,
+/// so RSS rises and then plateaus even when nothing leaks. What must be flat is
+/// what this code owns: the log against its ceiling, the listeners against
+/// their subscriptions, the pending queue against zero.
+///
+/// GXNET_SOAK_CYCLES raises the count for a real soak; the default keeps the
+/// suite under a second.
+void testSoak() {
+    group("soak");
+
+    int cycles = 60;
+    if (const char* env = std::getenv("GXNET_SOAK_CYCLES")) {
+        const int wanted = std::atoi(env);
+        if (wanted > 0) cycles = wanted;
+    }
+
+    Session session;
+    session.setMaxLogEntries(200);
+
+    std::size_t listener_calls = 0;
+    const std::size_t listener = session.listen([&](const link::Exchange&) { ++listener_calls; });
+
+    bool clean = true;
+    std::size_t log_high_water = 0;
+
+    for (int cycle = 0; cycle < cycles && clean; ++cycle) {
+        session.settings() = mockSettings();
+        session.connect();
+        if (!pump(session, [&] { return session.connected() && session.mock() != nullptr; })) {
+            clean = false;
+            break;
+        }
+
+        session.mock()->set("GW7D"_tok, Value{std::int16_t{0}});
+        for (int i = 0; i < 4; ++i) {
+            session.read("GW7D"_tok, [](link::LinkResult<Value>) {});
+            session.mock()->postSpontaneous({"A!WV63|WW60|1|WW68|0|LX02"});
+        }
+        pump(session, [&] { return session.pending() == 0 && session.spontaneousCount() >= 4; });
+
+        session.disconnect();
+        session.update();
+
+        // Every cycle ends where it started. A queue that does not drain, or a
+        // request that is never retired, shows up here on the second lap rather
+        // than after a month of running.
+        if (session.pending() != 0) clean = false;
+        if (session.connected()) clean = false;
+        log_high_water = std::max(log_high_water, session.log().size());
+    }
+
+    check(clean, "every cycle ends idle and disconnected");
+    check(log_high_water <= 200, "the log never exceeds its ceiling");
+    check(listener_calls >= static_cast<std::size_t>(cycles), "the listener kept being called throughout");
+
+    session.unlisten(listener);
+    session.clearLog();
+    checkEq(session.log().size(), std::size_t{0}, "and everything can still be released at the end");
+}
+
 }  // namespace
 
 int main() {
@@ -247,6 +317,7 @@ int main() {
     testLogAnnotations();
     testLogWindow();
     testDescribeTelegram();
+    testSoak();
 
     std::cout << "\n" << (g_checks - g_failures) << "/" << g_checks << " checks passed\n";
     return g_failures == 0 ? 0 : 1;
