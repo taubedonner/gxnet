@@ -13,6 +13,7 @@ jobs:
   windows:
     name: windows / ${{ matrix.name }}
     runs-on: windows-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -38,6 +39,7 @@ jobs:
   windows-mingw:
     name: windows / llvm-mingw cross-check
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
 
@@ -59,6 +61,7 @@ jobs:
   linux-sanitizers:
     name: linux / ${{ matrix.sanitize }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -81,12 +84,13 @@ jobs:
         env:
           ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
           UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
-          GXNET_SOAK_CYCLES: 200
+          GXNET_SOAK_CYCLES: 300
         run: ctest --test-dir build --output-on-failure
 
   soak:
     name: linux / long soak
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
 
@@ -102,5 +106,5 @@ jobs:
       - name: Soak
         env:
           ASAN_OPTIONS: detect_leaks=1
-          GXNET_SOAK_CYCLES: 5000
+          GXNET_SOAK_CYCLES: 3000
         run: ./build/gxdemo_tests

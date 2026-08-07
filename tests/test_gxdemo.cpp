@@ -57,13 +57,24 @@ void checkEq(const A& actual, const B& expected, const std::string& what) {
 /// Everything in Session is delivered from `update()`, which is normally a
 /// timer tick. Here it is a loop with a ceiling, so a callback that never fires
 /// fails the test instead of hanging the suite.
-bool pump(Session& session, const std::function<bool()>& done, int max_ticks = 40000) {
-    for (int tick = 0; tick < max_ticks; ++tick) {
+bool pump(Session& session, const std::function<bool()>& done,
+          std::chrono::milliseconds budget = std::chrono::seconds{5}) {
+    // Bounded by the clock, not by a tick count. A tick budget is a guess about
+    // how fast the machine is, and the guess is wrong by an order of magnitude
+    // between a native build and a sanitized one on a shared runner: the same
+    // loop that returns in microseconds here spins for minutes there.
+    //
+    // The sleep is short but real. Yielding in a tight loop keeps a core busy
+    // fighting the very thread the loop is waiting for.
+    // Yield rather than sleep: every record here needs its own round trip
+    // through the worker, driven by update(), and a sleep of even 200 us costs
+    // more than the work because the platform rounds it up to a timer tick.
+    // The clock bound is what keeps a yield loop honest when the work never
+    // arrives.
+    const auto deadline = std::chrono::steady_clock::now() + budget;
+    while (std::chrono::steady_clock::now() < deadline) {
         session.update();
         if (done()) return true;
-        // Yield rather than sleep. The transport is a thread away, not a
-        // network away, and a millisecond of sleep per tick turns a soak of a
-        // few hundred cycles into minutes of waiting on nothing.
         std::this_thread::yield();
     }
     session.update();
