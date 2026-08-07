@@ -49,6 +49,11 @@ docs/markdown/
 # worth keeping out of it are recorded in the code and the notes instead.
 docs/Samples/
 
+# The service built on this library: its design, its API notes, its deployment.
+# Business logic tied to one installation and one ERP, and none of it is what
+# this repository is for. Create files here freely; they stay local.
+docs/service/
+
 # Captures and logs pulled off the server while debugging
 *.commlog
 *.log
