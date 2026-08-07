@@ -14,7 +14,8 @@ comes in.
 - Reads both the textual form and the binary form found in communication logs
 - Builds as a static library; a C ABI header is provided for embedding
 - 1917 subfunctions with symbolic names and introducing software versions
-- 403 self-checks across three binaries, no external test framework
+- 407 self-checks across three binaries, no external test framework
+- Clean under AddressSanitizer, UndefinedBehaviorSanitizer and ThreadSanitizer
 
 ---
 
@@ -60,6 +61,7 @@ tests/           plain asserts, no framework: core, transport, and gxdemo's
                  own model
 tools/           gen_registry.py, and a read-only BCS introspection script
 docs/            three notes files, described below
+.github/         CI: Windows first, Linux for the sanitizers
 dist/            packaged builds, gitignored
 
 Each component has its own `include/` and `src/`.
@@ -99,6 +101,14 @@ model — the connection, the log, the spontaneous listeners, the firmware gate.
 That last one links one source file out of `app/` and needs no window server,
 because `Session` deliberately includes no wxWidgets header.
 
+`gxdemo_tests` ends with a soak: connect, work, disconnect, repeatedly. It
+asserts on the containers rather than on resident size, because an allocator
+claims arenas and keeps them, so RSS rises and then plateaus even when nothing
+leaks. What must stay flat is what the program owns — the log against its
+ceiling, the listeners against their subscriptions, the pending queue against
+zero. `GXNET_SOAK_CYCLES=5000` turns it into a real soak; the default keeps the
+whole suite under a second.
+
 Sanitizers:
 
 ```sh
@@ -107,8 +117,14 @@ cmake --build build-asan -j && ctest --test-dir build-asan
 ```
 
 `GXNET_SANITIZE` is passed straight to `-fsanitize`, so `thread` works too and
-has to be built on its own. Clang and GCC only; on macOS LeakSanitizer is
-unavailable, and `leaks --atExit -- ./build/gxnet_tests` covers that gap.
+has to be built on its own. Clang and GCC only.
+
+**LeakSanitizer exists on Linux and nowhere else** — not on macOS, and not on
+Windows in any toolchain, MSVC and clang-cl included. So leak checking is a
+Linux job, which is what CI uses it for; on Windows, Dr. Memory or UMDH fill the
+gap, and a COM reference leak is invisible to all of them anyway because it is
+not a heap leak. AddressSanitizer itself does cross-compile with llvm-mingw and
+runs on Windows.
 
 Or without CMake:
 
