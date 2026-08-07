@@ -19,6 +19,13 @@ option(GXNET_BUILD_APP "Build the gxdemo application (fetches wxWidgets)" OFF)
 # with address. MSVC accepts "address" alone: it has no UndefinedBehaviorSanitizer
 # and no ThreadSanitizer, so anything else is refused rather than silently doing
 # nothing.
+# NOMINMAX for every Windows target, on the command line rather than in a
+# header. windows.h defines min and max as macros, any header can pull it in
+# first, and the resulting error names a line of ours that is perfectly correct.
+if(WIN32)
+    add_compile_definitions(NOMINMAX)
+endif()
+
 set(GXNET_SANITIZE "" CACHE STRING "Sanitizers to build with, e.g. address;undefined")
 
 if(GXNET_SANITIZE)

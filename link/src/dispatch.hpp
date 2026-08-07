@@ -4,11 +4,11 @@
 
 #ifdef _WIN32
 
-#include <oaidl.h>
-// Before windows.h, and both matter. NOMINMAX keeps it from defining min and
-// max as macros, which turns any later std::min into std::(...) and a syntax
-// error a long way from here. WIN32_LEAN_AND_MEAN drops the parts of the API
-// this does not use; the COM headers below are included explicitly.
+// Ahead of every Windows header, including the ones others pull in: NOMINMAX
+// stops min and max being defined as macros, which turns a later std::min into
+// std::(...) and an error a long way from the cause. The build also defines it
+// on the command line, because a header cannot win an include-order race with
+// whatever included it first.
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -16,6 +16,8 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+
+#include <oaidl.h>
 
 #include <cstdint>
 #include <map>
