@@ -151,6 +151,15 @@ struct Token {
         return static_cast<std::uint8_t>((static_cast<std::uint8_t>(*g) << 4) | static_cast<std::uint8_t>(*t));
     }
 
+    /// The inverse of `classCode`: rebuilds a token from the class code and
+    /// index it is encoded as. Returns nullopt for the unassigned nibbles.
+    ///
+    /// Needed wherever a token appears as a number rather than as text. The
+    /// binary form encodes every token this way, and LGW_UFKENN carries one as
+    /// an ordinary word value: that is how a label field says which subfunction
+    /// supplies its content, so a layout export is full of them.
+    static constexpr std::optional<Token> fromClassCode(std::uint8_t cls, std::uint8_t index);
+
     /// Convenience: payload arity of this token's type, or 0 if unknown.
     constexpr int arity() const {
         const auto t = type();
@@ -166,6 +175,19 @@ struct Token {
     friend constexpr auto operator<=>(const Token&, const Token&) = default;
     friend constexpr bool operator==(const Token&, const Token&) = default;
 };
+
+constexpr std::optional<Token> Token::fromClassCode(std::uint8_t cls, std::uint8_t index) {
+    char group_letter = 0;
+    for (const auto& e : detail::kGroups) {
+        if (static_cast<std::uint8_t>(e.group) == (cls >> 4)) group_letter = e.letter;
+    }
+    char type_letter = 0;
+    for (const auto& e : detail::kTypes) {
+        if (static_cast<std::uint8_t>(e.type) == (cls & 0x0F)) type_letter = e.letter;
+    }
+    if (group_letter == 0 || type_letter == 0) return std::nullopt;
+    return Token{group_letter, type_letter, index};
+}
 
 constexpr std::optional<Token> Token::parse(std::string_view text) {
     if (text.size() != 4) return std::nullopt;

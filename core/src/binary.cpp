@@ -85,24 +85,19 @@ bool decodeNodes(const std::uint8_t* data, std::size_t size, const Options& opts
         const int group_nibble = (cls >> 4) & 0xF;
         const int type_nibble = cls & 0xF;
 
-        // Reconstruct the textual token from the class code.
-        static const char* kGroupLetters = "GA\0P\0LDEBSWXV\0M\0";
-        // index:                           0123456789ABCDEF
-        // 0:G 1:A 3:P 4:L 5:D 6:E 7:S 8:B 9:W A:X B:V D:M
-        static const char kGroupByNibble[16] = {'G', 'A', 0, 'P', 'L', 'D', 'E', 'S', 'B', 'W', 'X', 'V', 0, 'M', 0, 0};
-        (void)kGroupLetters;
-        char group = kGroupByNibble[group_nibble];
-
-        char type = 0;
-        switch (type_nibble) {
-            case 0: type = 'X'; break;
-            case 1: type = 'W'; break;
-            case 2: type = 'L'; break;
-            case 3: type = 'D'; break;
-            case 6: type = 'V'; break;
-            case 7: type = 'T'; break;
-            default: break;
+        // Reconstruct the textual token from the class code. The nibble to
+        // letter mapping lives in token.hpp; the two nibbles are looked up
+        // separately here because they fail differently, which is why this does
+        // not simply call Token::fromClassCode.
+        char group = 0;
+        for (const auto& e : detail::kGroups) {
+            if (static_cast<std::uint8_t>(e.group) == group_nibble) group = e.letter;
         }
+        char type = 0;
+        for (const auto& e : detail::kTypes) {
+            if (static_cast<std::uint8_t>(e.type) == type_nibble) type = e.letter;
+        }
+
         if (type == 0) {
             char buf[64];
             std::snprintf(buf, sizeof(buf), "unknown data type nibble 0x%X in class byte 0x%02X", type_nibble, cls);

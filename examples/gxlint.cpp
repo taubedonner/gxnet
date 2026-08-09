@@ -11,6 +11,7 @@
 // Header lines are recognised by their A!/A?/I!/I?/G!/G?/!/? prefix; any line
 // that follows a header and is not itself one is treated as a data record.
 
+#include <cstdint>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -19,16 +20,61 @@
 
 #include <regex>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 namespace {
+
+using namespace gxnet::literals;
+
+// Text in a telegram is passed through byte for byte, so a label exported with
+// Cyrillic field content arrives here as UTF-8 and leaves as UTF-8. A console
+// left on its default OEM code page renders those bytes as something else
+// entirely, which looks like a decoding bug in this tool and is not one.
+//
+// The previous code page goes back on the way out: this is one command in a
+// shell session, not the owner of its settings. Everywhere but Windows the
+// class is empty and the console is left alone.
+class Utf8Console {
+public:
+    Utf8Console() {
+#ifdef _WIN32
+        previous_ = GetConsoleOutputCP();
+        SetConsoleOutputCP(CP_UTF8);
+#endif
+    }
+
+    ~Utf8Console() {
+#ifdef _WIN32
+        if (previous_ != 0) SetConsoleOutputCP(previous_);
+#endif
+    }
+
+    Utf8Console(const Utf8Console&) = delete;
+    Utf8Console& operator=(const Utf8Console&) = delete;
+
+#ifdef _WIN32
+private:
+    UINT previous_ = 0;
+#endif
+};
 
 // Communication log lines look like:
 //   04.08.2026  06:56:08::216 A-> 90770102D1060BB8
-// Returns the hexadecimal payload, or an empty string when the line is not one.
-std::string extractHex(const std::string& line) {
+struct HexLine {
+    std::string hex;     ///< empty when the line is not one
+    std::string prefix;  ///< what precedes the payload: timestamp and direction
+};
+
+// The prefix is taken from where the match starts rather than by subtracting
+// the payload's length from the line's, which silently keeps part of the
+// payload when the line ends in whitespace.
+HexLine extractHex(const std::string& line) {
     static const std::regex re(R"((?:->|<-)\s*([0-9A-Fa-f]{8,})\s*$)");
     std::smatch m;
-    if (std::regex_search(line, m, re)) return m[1].str();
-    return {};
+    if (!std::regex_search(line, m, re)) return {};
+    return {m[1].str(), line.substr(0, static_cast<std::size_t>(m.position(1)))};
 }
 
 bool looksLikeHeader(const std::string& line) {
@@ -52,6 +98,37 @@ std::string describe(const gxnet::Token& token) {
     return out;
 }
 
+// LGW_UFKENN says which subfunction supplies a field's content, as that
+// subfunction's own numeric code. Without this a label export is a page of bare
+// numbers where the interesting column is which field prints what.
+std::string annotate(const gxnet::Token& token, const gxnet::Value& value) {
+    if (token != "LW02"_tok) return {};
+
+    // A word, so int16_t in practice, but a capture reaches here through more
+    // than one parser and the wider type costs nothing to accept. The cast to
+    // unsigned is the point: a class byte above 0x7F makes the word negative.
+    std::int32_t number = 0;
+    if (const auto* w = std::get_if<std::int16_t>(&value)) {
+        number = *w;
+    } else if (const auto* l = std::get_if<std::int32_t>(&value)) {
+        number = *l;
+    } else {
+        return {};
+    }
+
+    const auto raw = static_cast<std::uint16_t>(number);
+    const auto referenced = gxnet::Token::fromClassCode(static_cast<std::uint8_t>(raw >> 8),
+                                                        static_cast<std::uint8_t>(raw & 0xFF));
+    if (!referenced) return {};
+
+    std::string out = referenced->str();
+    if (auto info = gxnet::Registry::builtin().find(*referenced)) {
+        out += " ";
+        out += std::string(info->name);
+    }
+    return out;
+}
+
 std::string renderValue(const gxnet::Value& v) {
     if (gxnet::isEmpty(v)) return "-";
     if (std::holds_alternative<gxnet::Dimension>(v)) {
@@ -61,27 +138,46 @@ std::string renderValue(const gxnet::Value& v) {
     return gxnet::encodeValue(v);
 }
 
-void printTree(const std::vector<gxnet::Node>& nodes, int depth) {
+// Prints the node tree with each leaf's value beside its name.
+//
+// The three input shapes differ only in where the value is kept: the binary and
+// interleaved forms fill the node, header-plus-data leaves the node empty and
+// puts the values in a record, in header order. Taking the node first and
+// falling back to the record covers all three, and `field` counts payload
+// tokens across the whole tree because that is what a record is indexed by.
+void printNodes(const std::vector<gxnet::Node>& nodes, int depth, const gxnet::Record* record, std::size_t& field) {
     for (const gxnet::Node& n : nodes) {
-        std::cout << "  " << std::string(depth * 2, ' ') << describe(n.token) << "\n";
-        if (!n.children.empty()) printTree(n.children, depth + 1);
+        std::cout << "  " << std::string(depth * 2, ' ') << describe(n.token);
+        if (n.token.arity() > 0) {
+            gxnet::Value value = n.value;
+            if (gxnet::isEmpty(value) && record != nullptr && field < record->size()) {
+                value = (*record)[field];
+            }
+            ++field;
+            // A read carries no values at all, and printing a placeholder for
+            // every one of its tokens buries the tokens.
+            if (!gxnet::isEmpty(value)) {
+                std::cout << " = " << renderValue(value);
+                const std::string note = annotate(n.token, value);
+                if (!note.empty()) std::cout << "   (" << note << ")";
+            }
+        }
+        std::cout << "\n";
+        if (!n.children.empty()) printNodes(n.children, depth + 1, record, field);
     }
 }
 
-void printBinaryNodes(const std::vector<gxnet::Node>& nodes, int depth) {
-    for (const gxnet::Node& n : nodes) {
-        std::cout << "  " << std::string(depth * 2, ' ') << describe(n.token);
-        if (!gxnet::isEmpty(n.value)) {
-            std::cout << " = " << renderValue(n.value);
-        }
-        std::cout << "\n";
-        if (!n.children.empty()) printBinaryNodes(n.children, depth + 1);
-    }
+void printNodes(const std::vector<gxnet::Node>& nodes, const gxnet::Record* record = nullptr) {
+    std::size_t field = 0;
+    printNodes(nodes, 0, record, field);
 }
 
 }  // namespace
 
 int main(int argc, char** argv) {
+    // Before anything is printed, --help included.
+    const Utf8Console utf8_console;
+
     gxnet::ValidateOptions opts;
     bool quiet = false;
 
@@ -103,12 +199,18 @@ int main(int argc, char** argv) {
 usage: gxlint [--device MM.mm] [--quiet] < capture
 
 Reads stdin and writes an annotated listing: every token expanded to its
-symbolic name and the release it appeared in, payload values decoded, and
-anything the target device would refuse reported as an error.
+symbolic name and the release it appeared in, each value printed beside the
+token it belongs to, and anything the target device would refuse reported as
+an error.
+
+LGW_UFKENN values are resolved back to the subfunction they name, which is what
+makes a label layout readable: a field carrying 12800 is a field printing
+PSL_STCK_SUM.
 
 Two input shapes, mixed freely in one file:
 
-  textual     a header line and, optionally, the data line under it
+  textual     a header line and, optionally, the data line under it. Device
+              exports use this shape, including layouts exported from BRAIN2:
                 A?ST8D
                 A!ST8D|16.40.0002
 
@@ -120,8 +222,8 @@ Two input shapes, mixed freely in one file:
 
 The second is why this exists. `Bizerba._connect.BRAIN.Server_<date>.log` and
 `CommU_<device>_<date>.commlog` are written in that form, and they are the only
-record of what actually reached the device -- including, when a frame is
-missing, what did not.
+record of what actually reached the device, including, when a frame is missing,
+what did not.
 
 options
   --device MM.mm   firmware to validate against, e.g. --device 16.40. Without
@@ -147,6 +249,19 @@ examples
     int errors = 0;
     int telegrams = 0;
 
+    // A header's tree is worth printing once, with the values in it. Whether
+    // there are any depends on the line after it, which has not been read yet,
+    // so the tree waits: a data record prints it with the values filled in, and
+    // anything else prints it bare.
+    bool tree_shown = false;
+    const auto flushHeader = [&] {
+        if (!have_header || tree_shown) return;
+        tree_shown = true;
+        if (quiet) return;
+        printNodes(current.nodes);
+        std::cout << "\n";
+    };
+
     while (std::getline(std::cin, line)) {
         while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) {
             line.pop_back();
@@ -168,18 +283,20 @@ examples
         // real communication log is full of them and none is a telegram, so
         // parsing them produced one spurious error per line and buried the real
         // ones. Shown, because the timestamps around a gap are the point.
-        if (line.find(" -- ") != std::string::npos && extractHex(line).empty()) {
+        if (line.find(" -- ") != std::string::npos && extractHex(line).hex.empty()) {
             if (!quiet) std::cout << line << "\n";
             continue;
         }
 
         // A communication log line carries the compact binary form.
-        const std::string hex = extractHex(line);
-        if (!hex.empty()) {
+        const HexLine frame_line = extractHex(line);
+        if (!frame_line.hex.empty()) {
+            flushHeader();
+            const std::string& hex = frame_line.hex;
             gxnet::binary::Options bopts;
             bopts.units = gxnet::binary::inferredUnitTable();
             auto frame = gxnet::binary::parseHex(hex, bopts);
-            std::cout << line.substr(0, line.size() - hex.size()) << "[" << hex.size() / 2 << " bytes]\n";
+            std::cout << frame_line.prefix << "[" << hex.size() / 2 << " bytes]\n";
             if (!frame) {
                 std::cout << "  ! binary parse error: " << frame.error.message << "\n\n";
                 ++errors;
@@ -190,7 +307,7 @@ examples
             std::snprintf(hdr, sizeof(hdr), "%02X%02X%02X%02X", frame->header[0], frame->header[1], frame->header[2],
                           frame->header[3]);
             std::cout << "  frame " << hdr << "\n";
-            if (!quiet) printBinaryNodes(frame->nodes, 0);
+            if (!quiet) printNodes(frame->nodes);
             gxnet::Telegram t = gxnet::binary::toTelegram(*frame);
             for (const gxnet::Diagnostic& d : validate(t, opts)) {
                 std::cout << "  " << d.str() << "\n";
@@ -202,6 +319,7 @@ examples
         }
 
         if (looksLikeHeader(line)) {
+            flushHeader();
             auto header = gxnet::parseHeader(line);
             if (!header) {
                 // Not a plain header: most single commands are sent in the
@@ -219,14 +337,7 @@ examples
                 have_header = false;  // values were inline; no data line follows
                 std::cout << line << "  (interleaved form)\n";
 
-                std::vector<gxnet::Token> tokens = one->header.payloadTokens();
-                const gxnet::Record& record = one->records.front();
-                if (!quiet) {
-                    printTree(one->header.nodes, 0);
-                    for (std::size_t i = 0; i < record.size(); ++i) {
-                        std::cout << "    " << tokens[i].str() << " = " << renderValue(record[i]) << "\n";
-                    }
-                }
+                if (!quiet) printNodes(one->header.nodes, &one->records.front());
                 for (const gxnet::Diagnostic& d : validate(*one, opts)) {
                     std::cout << "  " << d.str() << "\n";
                     if (d.severity == gxnet::Severity::Error) ++errors;
@@ -236,16 +347,17 @@ examples
             }
             current = *header;
             have_header = true;
+            tree_shown = false;
             ++telegrams;
 
+            // No blank line here: the tree has not been printed yet, and the
+            // separator belongs at the end of the telegram rather than the
+            // middle of it.
             std::cout << line << "\n";
-            if (!quiet) printTree(current.nodes, 0);
-
             for (const gxnet::Diagnostic& d : validate(current, opts)) {
                 std::cout << "  " << d.str() << "\n";
                 if (d.severity == gxnet::Severity::Error) ++errors;
             }
-            std::cout << "\n";
             continue;
         }
 
@@ -263,14 +375,14 @@ examples
         }
 
         std::cout << "  data: " << line << "\n";
-        if (!quiet) {
-            std::vector<gxnet::Token> tokens = current.payloadTokens();
-            for (std::size_t i = 0; i < record->size(); ++i) {
-                std::cout << "    " << tokens[i].str() << " = " << renderValue((*record)[i]) << "\n";
-            }
-        }
+        tree_shown = true;
+        if (!quiet) printNodes(current.nodes, &*record);
         std::cout << "\n";
     }
+
+    // A header on the last line of the file has no record after it, and its
+    // tree is still worth printing.
+    flushHeader();
 
     std::cerr << telegrams << " telegram(s), " << errors << " error(s)\n";
     return errors == 0 ? 0 : 1;

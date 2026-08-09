@@ -159,20 +159,11 @@ std::string channelBitmapText(std::int32_t bitmap) {
 /// the low, class = (group << 4) | type.
 std::string ufkennText(std::int32_t code) {
     const auto raw = static_cast<std::uint16_t>(code);
-    const auto cls = static_cast<std::uint8_t>(raw >> 8);
-    const auto index = static_cast<std::uint8_t>(raw & 0xFF);
+    const auto decoded =
+        Token::fromClassCode(static_cast<std::uint8_t>(raw >> 8), static_cast<std::uint8_t>(raw & 0xFF));
+    if (!decoded) return {};
 
-    char group_letter = 0;
-    for (const auto& entry : detail::kGroups) {
-        if (static_cast<std::uint8_t>(entry.group) == (cls >> 4)) group_letter = entry.letter;
-    }
-    char type_letter = 0;
-    for (const auto& entry : detail::kTypes) {
-        if (static_cast<std::uint8_t>(entry.type) == (cls & 0x0F)) type_letter = entry.letter;
-    }
-    if (group_letter == 0 || type_letter == 0) return {};
-
-    const Token token{group_letter, type_letter, index};
+    const Token token = *decoded;
     std::string out = token.str();
     if (const auto name = tokenName(token)) {
         out += " ";
