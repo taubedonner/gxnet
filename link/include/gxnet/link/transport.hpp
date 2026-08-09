@@ -218,12 +218,9 @@ public:
     virtual LinkResult<Exchange> execute(const Request& request) = 0;
 
     /// The queue the server files spontaneous records under when the client has
-    /// not made one of its own.
-    ///
-    /// From the manual: "Спонтанные данные от устройства, для которого не
-    /// создана очередность пользователей, автоматически присваиваются
-    /// очередности с идентификатором DUSTBIN." The name is not a joke about the
-    /// contents -- it is the literal handle to pass to a receive method.
+    /// not made one of its own. Not a description of what happened to them: it
+    /// is the literal handle to pass to a receive method. See
+    /// `docs/bcs-notes.md`, section 1.
     static constexpr const char* kDefaultQueue = "DUSTBIN";
 
     /// Collects one record the device sent of its own accord, if one is waiting.

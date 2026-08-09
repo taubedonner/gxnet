@@ -276,15 +276,14 @@ public:
     /// Collects one spontaneous record, by receiving against a queue name
     /// instead of a send handle.
     ///
-    /// This is the whole mechanism, and it took reading the server manual rather
-    /// than the protocol reference to find it. `ReceiveOne`'s `szHandle` is
-    /// documented as "дескриптор, который отдается методом Send" -- but the
-    /// description of `ReceiveOneWithoutAck` gives the same parameter a second
-    /// meaning: "Дескриптор для спонтанных данных (DUSTBIN или созданная
-    /// очередность)". The two methods differ only in who acknowledges, so the
-    /// handle means the same thing in both. `ReceiveOne` acknowledges by itself,
-    /// which is why it is the one used here: an unacknowledged record leaves the
-    /// device waiting, and on a labelling line that is not a small thing.
+    /// `ReceiveOne`'s `szHandle` reads as a send handle, but the description of
+    /// `ReceiveOneWithoutAck` gives the same parameter a second meaning: a
+    /// queue name. The two differ only in who acknowledges, so it means the
+    /// same in both. See `docs/bcs-notes.md`, section 1 for the passages.
+    ///
+    /// `ReceiveOne` is the one used here because it acknowledges by itself: an
+    /// unacknowledged record leaves the device waiting, and on a labelling line
+    /// that is not a small thing.
     ///
     /// `CreateReceiveQueue` and `SetReceiveQueueFilter` would let us sort
     /// arrivals into queues by leading token. Deliberately not used: one queue

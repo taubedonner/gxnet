@@ -290,7 +290,7 @@ struct DialogResult {
 /// else -- an acknowledgement, an error, or nothing recognisable.
 [[nodiscard]] std::optional<DialogResult> parseDialogResult(const Telegram& reply);
 
-/// `A?WV63|WW60|<handle>|LX02` — asks for a dialog's answer by its handle.
+/// `A?WV63|WW60|<handle>|LX02`: asks for a dialog's answer by its handle.
 ///
 /// For devices that deliver nothing unasked: the answer has to be requested
 /// rather than waited for. The reference marks `WV63` with neither `?` nor `!`,
@@ -298,7 +298,7 @@ struct DialogResult {
 /// answers `fremdes Kommando`.
 [[nodiscard]] Telegram dialogResultQuery(std::int16_t handle);
 
-/// `A?WW68` — `WZW_EXIT` on its own: 0 input OK, 1 cancelled with HOME.
+/// `A?WW68`: `WZW_EXIT` on its own: 0 input OK, 1 cancelled with HOME.
 ///
 /// The fallback when `dialogResultQuery` is refused. `WZW_EXIT`, `WZW_SDD_ID`
 /// and `WZW_HDL` are ordinary word subfunctions with printed value ranges, so
@@ -403,7 +403,7 @@ struct SoftkeyInput {
 /// in the reference, so reading it is unspecified rather than forbidden.
 [[nodiscard]] Telegram softkeyPressQuery(std::optional<std::int16_t> number = std::nullopt);
 
-/// `A?WVA6|LX02` — `WZV_GXNET_META_SOFTKEY_INFO`, 12.00 SP5.
+/// `A?WVA6|LX02`: `WZV_GXNET_META_SOFTKEY_INFO`, 12.00 SP5.
 ///
 /// Answers with `WZW_REMOTE_SOFTKEY_ATTR` (0 locked, 1 active) and `WZT_LABEL`
 /// per softkey: whether a key exists and whether it is usable, without looking
