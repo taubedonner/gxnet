@@ -8,15 +8,7 @@ Nothing installation-specific lives here: no addresses, no licences, no captured
 
 ## How to read these notes
 
-The vendor manuals are **not in this repository** – they are Bizerba's and stay out of it. Every claim here therefore carries something to search the originals with, and that is the point of the file rather than a decoration:
-
-- the **symbolic name** as the manual spells it (`GGW_SENDKANAL_A_ENABLE`), which is unique and greppable;
-- the **subfunction code** (`GWBF`) and the release it appeared in;
-- where the passage is not findable by name, a **chapter or page** and a short **German quote**, because the tables repeat their headings and a page number alone drifts between editions.
-
-**Use the German edition.** `GxNet-de.md` is a later revision than `GxNet.md`: the English `LGW_RETURN` table stops at 2658 and has no codes 14–24, and the `GGT_SIMPLE_TXT` limits are a version behind. Confirmed by converting the English PDF independently, so it is an edition difference and not a conversion loss.
-
-Where a claim rests on a deduction rather than a reading, the deduction is shown. Where it was measured on a device, it says so.
+The vendor manuals are **not in this repository** – they are Bizerba's and stay out of it, so every claim here carries something to search the originals with. The citation convention, and why the German edition, are set out in [`gxnet-notes.md`](gxnet-notes.md), *How to read these notes*. Same rules apply here: a deduction is shown as one, and a measurement says so.
 
 Companion files:
 

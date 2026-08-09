@@ -97,14 +97,14 @@ The device answers `WZV_SDD_START` with `LGW_RETURN` 1 and `LGW_DEBUG` 0x4529 = 
 
 > **input tools: function not available**
 
-### How that turned out, and the lesson in it
+### How that turned out
 
 **The dialog works.** Sent without `WW62`, on the same firmware, the window renders with its headline and its label as intended. The refusal was caused by the one field in the telegram whose token code was a deduction rather than a reading: `WZW_SDD_ELEM_COUNT` was being sent as `WW62` because 0x62 is printed in the coding table as an unnamed "counting variable" and its neighbours are 0x60 `WZW_HDL`, 0x61 `WZW_SDD_TYP`, 0x63 `WZW_SDD_ELEM_TYP`. It is not that. What 0x62 really is remains unknown; what is known is that `WZV_SDD_START` must not carry it. `link::DialogSpec` leaves it out by default.
 
-So the decode was accurate and misleading at the same time. "Function not available" described the refusal correctly – the input-tool subsystem had no function matching *that field set* – and read like a verdict on the command. Two things follow, and they are worth more than the specific finding:
+The decode was accurate and misleading at once: "function not available" described the refusal correctly, the input-tool subsystem having no function matching *that field set*, but reads like a verdict on the command. Two rules follow:
 
-1. **A decoded error names the refusal, not the capability.** Nothing in 17705 said "this device cannot do dialogs", and the reasoning that got there was mine, not the device's.
-2. **The one field we invented was the one that broke it.** Everything else in that telegram was transcribed; the single deduction was the fault. When a telegram is refused and part of it is deduced, vary the deduced part first, before reasoning about what the refusal means.
+1. **A decoded error names the refusal, not the capability.** Nothing in 17705 says the device cannot do dialogs.
+2. **When a refused telegram contains a deduced field, vary that field before reasoning about the refusal.** Everything else here was transcribed; the single deduction was the fault.
 
 The codes that did *not* come back still rule out what they ruled out – none of them was the cause, and the cause had no code of its own:
 

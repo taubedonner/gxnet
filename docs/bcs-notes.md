@@ -6,15 +6,7 @@ The COM/DCOM automation server that carries GxNet telegrams. What the manual doc
 
 ## How to read these notes
 
-The vendor manuals are **not in this repository** – they are Bizerba's and stay out of it. Every claim here therefore carries something to search the originals with, and that is the point of the file rather than a decoration:
-
-- the **symbolic name** as the manual spells it (`GGW_SENDKANAL_A_ENABLE`), which is unique and greppable;
-- the **subfunction code** (`GWBF`) and the release it appeared in;
-- where the passage is not findable by name, a **chapter or page** and a short **German quote**, because the tables repeat their headings and a page number alone drifts between editions.
-
-**Use the German edition.** `GxNet-de.md` is a later revision than `GxNet.md`: the English `LGW_RETURN` table stops at 2658 and has no codes 14–24, and the `GGT_SIMPLE_TXT` limits are a version behind. Confirmed by converting the English PDF independently, so it is an edition difference and not a conversion loss.
-
-Where a claim rests on a deduction rather than a reading, the deduction is shown. Where it was measured on a device, it says so.
+The vendor manuals are **not in this repository** – they are Bizerba's and stay out of it, so every claim here carries something to search the originals with. The citation convention, and why the German edition, are set out in [`gxnet-notes.md`](gxnet-notes.md), *How to read these notes*. Same rules apply here: a deduction is shown as one, and a measurement says so.
 
 Companion files:
 
@@ -48,14 +40,14 @@ There are also `DataArrival(szQueueName)` and `RemoteDataArrival(szQueueName)` e
 
 BCS `Send(szHeader, szData, out szHandle, nTimeout, out lStatus)` documents `nTimeout` as "интервал времени, в течение которого метод ожидает **ответа от устройства**". Not delivery – the answer. A telegram that produces no application-level answer therefore burns the whole timeout and reports one, and it does so *after arriving perfectly well*.
 
-Measured, and the two halves are worth keeping together:
+Measured, both halves together:
 
 - the client sends `WZV_SDD_START`, waits 3033 ms, logs a timeout;
 - the server's own log, decoded, shows the same telegram acknowledged by the device with `LGW_QUIT_OK` **3 ms** after it went out, and the dialog appears on the terminal.
 
 So a timeout on a write says nothing about whether the device got it. Two things follow for anything built on this transport:
 
-1. **Do not report it as a failure.** The wrong version of this log line taught exactly the wrong lesson: the window was on the operator's terminal and the program said the send had failed.
+1. **Do not report it as a failure.** The window was on the operator's terminal while the program said the send had failed.
 2. **The protocol-level acknowledgement never reaches the client.** `LGW_QUIT_OK` is consumed by `_connect.BRAIN` as "the send succeeded"; a refusal *does* come through, which is why 17705 was visible. So an answer arriving is evidence, and an answer not arriving is not.
 
 `Exchange::send_status` carries `lStatus` as `Send` itself reported it, kept apart from the exchange's final status. The vendor's samples receive only while that value is 2; this code receives whenever the caller asked for a reply. Which is right cannot be settled by argument, so the value is now in the log beside every sent line rather than folded away.
