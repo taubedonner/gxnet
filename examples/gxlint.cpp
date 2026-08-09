@@ -13,6 +13,7 @@
 
 #include <cstdint>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -85,6 +86,10 @@ bool looksLikeHeader(const std::string& line) {
     return family && (line[1] == '!' || line[1] == '?');
 }
 
+// Set by --meaning. Off by default: a description per line triples the height
+// of a listing, and most of the time the name is what is being looked for.
+bool g_meaning = false;
+
 std::string describe(const gxnet::Token& token) {
     auto info = gxnet::Registry::builtin().find(token);
     std::string out = token.str();
@@ -95,27 +100,27 @@ std::string describe(const gxnet::Token& token) {
     } else {
         out += "  (not in the bundled table)";
     }
+    if (g_meaning) {
+        if (const auto meaning = gxnet::tokenMeaning(token)) {
+            out += "\n        " + std::string(*meaning);
+        }
+    }
     return out;
+}
+
+// The integer a value carries, whatever width it was parsed at.
+std::optional<std::int32_t> asNumber(const gxnet::Value& value) {
+    if (const auto* w = std::get_if<std::int16_t>(&value)) return *w;
+    if (const auto* l = std::get_if<std::int32_t>(&value)) return *l;
+    return std::nullopt;
 }
 
 // LGW_UFKENN says which subfunction supplies a field's content, as that
 // subfunction's own numeric code. Without this a label export is a page of bare
 // numbers where the interesting column is which field prints what.
-std::string annotate(const gxnet::Token& token, const gxnet::Value& value) {
-    if (token != "LW02"_tok) return {};
-
-    // A word, so int16_t in practice, but a capture reaches here through more
-    // than one parser and the wider type costs nothing to accept. The cast to
-    // unsigned is the point: a class byte above 0x7F makes the word negative.
-    std::int32_t number = 0;
-    if (const auto* w = std::get_if<std::int16_t>(&value)) {
-        number = *w;
-    } else if (const auto* l = std::get_if<std::int32_t>(&value)) {
-        number = *l;
-    } else {
-        return {};
-    }
-
+std::string ufkennText(std::int32_t number) {
+    // The cast to unsigned is the point: a class byte above 0x7F makes the
+    // word negative.
     const auto raw = static_cast<std::uint16_t>(number);
     const auto referenced = gxnet::Token::fromClassCode(static_cast<std::uint8_t>(raw >> 8),
                                                         static_cast<std::uint8_t>(raw & 0xFF));
@@ -127,6 +132,19 @@ std::string annotate(const gxnet::Token& token, const gxnet::Value& value) {
         out += std::string(info->name);
     }
     return out;
+}
+
+// What the number means, where the reference names it. Empty when the
+// semantics table was never generated, which is a fresh checkout's normal
+// state.
+std::string annotate(const gxnet::Token& token, const gxnet::Value& value) {
+    const auto number = asNumber(value);
+    if (!number) return {};
+
+    if (token == "LW02"_tok) return ufkennText(*number);
+
+    if (const auto named = gxnet::tokenValueName(token, *number)) return std::string(*named);
+    return {};
 }
 
 std::string renderValue(const gxnet::Value& v) {
@@ -192,11 +210,13 @@ int main(int argc, char** argv) {
             }
         } else if (arg == "--quiet") {
             quiet = true;
+        } else if (arg == "--meaning") {
+            g_meaning = true;
         } else if (arg == "--help" || arg == "-h") {
             std::cout <<
                 R"(gxlint - read a GxNet capture and say what is in it.
 
-usage: gxlint [--device MM.mm] [--quiet] < capture
+usage: gxlint [--device MM.mm] [--quiet] [--meaning] < capture
 
 Reads stdin and writes an annotated listing: every token expanded to its
 symbolic name and the release it appeared in, each value printed beside the
@@ -206,6 +226,10 @@ an error.
 LGW_UFKENN values are resolved back to the subfunction they name, which is what
 makes a label layout readable: a field carrying 12800 is a field printing
 PSL_STCK_SUM.
+
+Where the reference names a value, the name is shown beside the number. That
+table is built from the vendor manual and is not part of a checkout; without
+it the numbers are simply left bare.
 
 Two input shapes, mixed freely in one file:
 
@@ -229,6 +253,8 @@ options
   --device MM.mm   firmware to validate against, e.g. --device 16.40. Without
                    it every subfunction is accepted whatever release it needs.
   --quiet          errors only, no listing.
+  --meaning        also print what each subfunction is for. Needs the
+                   semantics table; without it nothing is added.
 
 exit status is 0 when nothing was reported, 1 when something was.
 

@@ -20,11 +20,17 @@ with, and that is the point of the file rather than a decoration:
   **German quote**, because the tables repeat their headings and a page number
   alone drifts between editions.
 
-**Use the German edition.** `GxNet-de.md` is a later revision than `GxNet.md`:
-the English `LGW_RETURN` table stops at 2658 and has no codes 14–24, and the
-`GGT_SIMPLE_TXT` limits are a version behind. Confirmed by converting the
-English PDF independently, so it is an edition difference and not a conversion
-loss.
+**Use the German edition.** Not because it is newer — both editions carry the
+same date, `28.05.2026` — but because the English translation is incomplete.
+`GxNet_de_de.pdf` runs to 661 pages against the English 527, and the gap is
+content: the English `LGW_RETURN` table jumps from 13 straight to 150, where
+the German has codes 14–24, and the `GGT_SIMPLE_TXT` limits are a version
+behind.
+
+Checked by extracting both PDFs directly rather than through the markdown, so
+this is a translation gap and not a conversion artefact. The distinction
+matters because the markdown *did* mislead once: `GxNet.md` lost every table in
+conversion, which made the English edition look far emptier than it is.
 
 Where a claim rests on a deduction rather than a reading, the deduction is
 shown. Where it was measured on a device, it says so.

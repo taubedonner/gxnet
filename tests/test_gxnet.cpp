@@ -195,6 +195,40 @@ static void testRegistry() {
     checkEq(by_name->str(), std::string("GL19"), "GGL_PLUNR is GL19");
 }
 
+/// Subfunction semantics, which are an optional table.
+///
+/// Both states are a supported configuration and both are tested here, chosen
+/// by whether the generated header exists. A checkout has no vendor reference
+/// to generate it from, so the absent case is the one CI exercises and the
+/// present case is the one the author sees; without this test only ever one of
+/// them would be tried.
+static void testTokenDocs() {
+    group("subfunction semantics");
+
+    const Token resolution = *Token::parse("EW0D");
+
+    // Asserted by shape rather than by text: what the reference actually says
+    // is the part that stays out of this repository.
+#ifdef GXNET_HAS_TOKEN_DOCS
+    check(tokenMeaning(resolution).has_value(), "a documented token says what it is for");
+    const auto named = tokenValueName(resolution, 3);
+    check(named.has_value(), "and names a value it defines");
+    check(named && !named->empty(), "with something to show");
+    check(!tokenValues(resolution).empty(), "its values are enumerated");
+    check(tokenValueName(resolution, 999) == std::nullopt, "an undefined value is not invented");
+#else
+    check(tokenMeaning(resolution) == std::nullopt, "without the table nothing is claimed");
+    check(tokenValues(resolution).empty(), "and no values are enumerated");
+    check(tokenValueName(resolution, 3) == std::nullopt, "and no value is named");
+#endif
+
+    // True either way: a token absent from the reference is absent from this
+    // table too, and asking about one must not be a special case for callers.
+    const Token unknown{'Z', 'W', 0xFF};
+    check(tokenMeaning(unknown) == std::nullopt, "an unknown token has no meaning");
+    check(tokenValues(unknown).empty(), "and no values");
+}
+
 static void testCompileTimeRegistry() {
     group("compile-time lookups");
 
@@ -687,6 +721,7 @@ int main() {
     testEscaping();
     testUnicodeModes();
     testRegistry();
+    testTokenDocs();
     testCompileTimeRegistry();
     testEncodeDocumentedExample();
     testBlocksAndOneLine();

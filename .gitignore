@@ -44,6 +44,13 @@ compile_commands.json
 docs/original/
 docs/Help/
 docs/markdown/
+
+# The same manuals reshaped into a header. What a subfunction is for and what
+# its values mean is Bizerba's prose whatever file extension it sits in, so the
+# generated table stays out too -- tools/gen_docs.py rebuilds it from a local
+# copy of the reference. Nothing depends on it being there: registry.hpp finds
+# it with __has_include and every accessor reports nothing when it is absent.
+core/include/gxnet/detail/registry_docs.hpp
 # Vendor sample code and templates: C++/C# examples, Excel macros, SAP
 # transports, XML file-interface samples. Third-party source, and the facts
 # worth keeping out of it are recorded in the code and the notes instead.

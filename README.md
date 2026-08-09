@@ -59,7 +59,7 @@ examples/        gxlint, which annotates and validates captures, and a
                  sample.commlog to point it at
 tests/           plain asserts, no framework: core, transport, and gxdemo's
                  own model
-tools/           gen_registry.py, and a read-only BCS introspection script
+tools/           gen_registry.py, gen_docs.py, a read-only BCS introspection script
 docs/            three notes files, described below
 .github/         CI: Windows first, Linux for the sanitizers
 dist/            packaged builds, gitignored
@@ -83,7 +83,8 @@ public. What stands in for them:
 Every claim in them cites the manual by symbolic name, subfunction code and,
 where a name is not enough, a chapter and a short German quote — so the
 originals stay searchable without being redistributed. `gen_registry.py` needs a
-local copy of `docs/markdown/GxNet.md`, which is gitignored.
+local copy of `docs/markdown/GxNet.md`, which is gitignored, and `gen_docs.py`
+builds an optional second table the same way.
 
 ---
 
@@ -551,6 +552,28 @@ The generator reads the markdown export of the vendor subfunction reference and
 emits the lookup table. That export is gitignored, so keep a local copy; re-run
 the generator whenever you receive a newer revision, and nothing else needs to
 change.
+
+### The optional semantics table
+
+Names and versions are identifiers and are tracked. What a subfunction is *for*
+and what its values *mean* is the manual's own prose, so that table is built
+locally and stays out of the repository:
+
+```sh
+python3 tools/gen_docs.py docs/markdown/GxNet-de.md \
+    core/include/gxnet/detail/registry_table.hpp \
+    > core/include/gxnet/detail/registry_docs.hpp
+```
+
+`registry.hpp` picks it up with `__has_include`. Without it everything still
+compiles and `tokenMeaning`, `tokenValues` and `tokenValueName` simply report
+nothing — that is the state of a fresh checkout, and the test suite covers both.
+
+With the table, `gxlint` names the value beside the number instead of leaving
+it bare, and `--meaning` adds what each subfunction is for.
+
+Use the German edition. Both editions carry the same date, but the English
+translation is incomplete; see [`docs/gxnet-notes.md`](docs/gxnet-notes.md).
 
 ---
 
