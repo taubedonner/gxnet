@@ -294,6 +294,11 @@ std::string annotateValue(Token token, const Value& value) {
 
     if (token == "GL38"_tok && n == 0) return "system bus not enabled on this device";
 
+    // Anything the cases above do not name, the reference may. Last rather than
+    // first: the readings above are bitmaps and composite codes, which the
+    // reference lists as one entry per bit and cannot spell out.
+    if (const auto named = tokenValueName(token, n)) return std::string(*named);
+
     return {};
 }
 
@@ -304,8 +309,9 @@ std::string_view returnCodeText(std::int32_t code) {
     // without a manual on the desk.
     //
     // Transcribed from the **German** edition, and that is not a preference.
-    // The English one stops at 2658 and omits codes 14 to 24 altogether -- the
-    // same table, an older revision. Among the codes only German has are the
+    // Both editions carry the same date; the English one is simply an
+    // incomplete translation and omits codes 14 to 24. Among the German-only
+    // codes are the
     // ones that say why an input tool refused something (17, 19, 2700) and the
     // one for a file that is not there (2157), which is exactly what an FTP
     // operation needs to be able to say.

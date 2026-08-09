@@ -675,6 +675,17 @@ void testAnnotations() {
     // A token with nothing to say stays silent rather than inventing a gloss.
     check(annotateValue("GL19"_tok, Value{std::int32_t{1521}}).empty(), "a PLU number decodes to nothing");
     check(annotateValue("GT63"_tok, Value{std::string("1234")}).empty(), "and so does a text");
+
+    // The optional semantics table extends this, and the hand-written readings
+    // keep precedence over it: they cover bitmaps and composite codes that the
+    // reference lists one bit at a time and cannot spell out as a whole.
+    check(annotateValue("GW7D"_tok, Value{std::int16_t{1}}).find("unique") != std::string::npos,
+          "a hand-written reading wins over the table");
+#ifdef GXNET_HAS_TOKEN_DOCS
+    check(!annotateValue("EW0D"_tok, Value{std::int16_t{3}}).empty(), "and the table covers what they do not");
+#else
+    check(annotateValue("EW0D"_tok, Value{std::int16_t{3}}).empty(), "and without the table nothing is invented");
+#endif
 }
 
 /// Reading a value out of one block rather than the first one in the telegram.
