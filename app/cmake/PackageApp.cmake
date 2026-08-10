@@ -8,8 +8,12 @@
 # `cmake -E tar` rather than zip(1): the same command works on every platform
 # the project builds on, including a Windows machine with no unix tools.
 #
+# gxlint goes in beside it. A capture sent back with a bug report is read with
+# the lint tool, and asking for a second download at that point wastes a round
+# trip with a running line at the other end.
+#
 # Expects: GXDEMO_VERSION, GXDEMO_SOURCE_DIR, GXDEMO_BINARY, GXDEMO_PLATFORM,
-#          GXDEMO_DIST.
+#          GXDEMO_DIST, and optionally GXDEMO_LINT.
 
 include("${CMAKE_CURRENT_LIST_DIR}/BuildStamp.cmake")
 gxnet_build_stamp()
@@ -21,6 +25,16 @@ endif()
 get_filename_component(_name "${GXDEMO_BINARY}" NAME)
 get_filename_component(_dir "${GXDEMO_BINARY}" DIRECTORY)
 
+set(_files "${_name}")
+if(GXDEMO_LINT AND EXISTS "${GXDEMO_LINT}")
+    get_filename_component(_lint_name "${GXDEMO_LINT}" NAME)
+    get_filename_component(_lint_dir "${GXDEMO_LINT}" DIRECTORY)
+    if(NOT _lint_dir STREQUAL _dir)
+        file(COPY "${GXDEMO_LINT}" DESTINATION "${_dir}")
+    endif()
+    list(APPEND _files "${_lint_name}")
+endif()
+
 set(_archive
     "${GXDEMO_DIST}/gxdemo-${GXDEMO_VERSION}-b${GXDEMO_BUILD}-${GXDEMO_SLUG}-${GXDEMO_PLATFORM}.zip")
 
@@ -29,7 +43,7 @@ file(MAKE_DIRECTORY "${GXDEMO_DIST}")
 # Run from the directory holding the binary so the archive contains the file
 # and not a tree of build directories.
 execute_process(
-    COMMAND "${CMAKE_COMMAND}" -E tar cf "${_archive}" --format=zip -- "${_name}"
+    COMMAND "${CMAKE_COMMAND}" -E tar cf "${_archive}" --format=zip -- ${_files}
     WORKING_DIRECTORY "${_dir}"
     RESULT_VARIABLE _result
 )
@@ -37,4 +51,4 @@ if(NOT _result EQUAL 0)
     message(FATAL_ERROR "packaging failed")
 endif()
 
-message(STATUS "packaged ${_archive}")
+message(STATUS "packaged ${_files} into ${_archive}")

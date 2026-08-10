@@ -108,6 +108,7 @@ add_custom_target(dist
         -D GXDEMO_BINARY=$<TARGET_FILE:gxdemo>
         -D GXDEMO_PLATFORM=${GXDEMO_PLATFORM}
         -D GXDEMO_DIST=${PROJECT_SOURCE_DIR}/dist
+        -D GXDEMO_LINT=$<$<TARGET_EXISTS:gxlint>:$<TARGET_FILE:gxlint>>
         -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PackageApp.cmake
     DEPENDS gxdemo
     COMMENT "Packaging gxdemo into dist/"
