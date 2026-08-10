@@ -37,6 +37,9 @@ VERSION = re.compile(r'^(\d{1,2})\.(\d{2})\b')
 # reference writes both "reserviert" and "reserviert ab 3.4". Matching the
 # word anywhere instead would catch every description that mentions a reserve.
 RESERVED = re.compile(r'^reserv(ed|iert)\b', re.IGNORECASE)
+# Cross references are markdown links in the conversion; here only their text
+# matters.
+LINK = re.compile(r'\[([^\]]*)\]\(#page-\d+\)')
 
 # Where "reserviert" sits is the coding column, so on its own it says only that
 # no parameter encoding is defined -- which is ordinary for a command that
@@ -48,7 +51,7 @@ RESERVED = re.compile(r'^reserv(ed|iert)\b', re.IGNORECASE)
 def rows(path):
     with open(path, encoding='utf-8') as fh:
         for line in fh:
-            line = line.rstrip()
+            line = LINK.sub(r'\1', line.rstrip())
             if line.startswith('|') and line.endswith('|'):
                 yield [cell.strip() for cell in line[1:-1].split('|')]
 

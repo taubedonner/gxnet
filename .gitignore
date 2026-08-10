@@ -64,3 +64,4 @@ docs/service/
 # Captures and logs pulled off the server while debugging
 *.commlog
 *.log
+__pycache__/
