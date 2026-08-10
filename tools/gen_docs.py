@@ -36,7 +36,21 @@ FRAGMENT = re.compile(r'^[#%!?*]?([A-Z][A-Z0-9_]*)$')
 VERSION = re.compile(r'^(\d{1,2})\.(\d{2})\b')
 # "0 = text", and the form that repeats the value unsigned in brackets.
 ENUM = re.compile(r'^(-?\d+)\s*(?:\([^)]*\))?\s*=\s*(.+)$')
-REGISTRY = re.compile(r"Token\{'(\w)', '(\w)', 0x([0-9A-F]{2})\}")
+REGISTRY = re.compile(r"Token\{'(\w)', '(\w)', 0x([0-9A-F]{2})\}, \"([A-Z0-9_]+)\"")
+# A cell that defers to another subfunction instead of repeating its coding,
+# and one that defers to the row above. Both are frequent enough that ignoring
+# them leaves several hundred entries saying nothing at all.
+SEE = re.compile(r'^(?:siehe|see)\s+([A-Z][A-Z0-9_]{2,})$', re.IGNORECASE)
+DITTO = re.compile(r'^(?:dto\.?|ditto|s\.o\.)$', re.IGNORECASE)
+LINK = re.compile(r'\[([^\]]*)\]\(#page-\d+\)')
+# The version the reference prints beside a value, pulled into the text by the
+# conversion because the two share a cell.
+TRAILING_VERSION = re.compile(r'\s*,\s*\d{1,2}\.\d{2}\s*$')
+# First cell of the header a coding table repeats when it continues on the next
+# page: "Kommando" in German, "Name" in English.
+HEADERS = {'Kommando', 'Name'}
+# The three columns worth reading, as the header spells them in either edition.
+COLUMNS = (('Kodierung', 'Coding'), ('Wertebereich', 'Value range'), ('Bedeutung', 'Meaning'))
 
 
 def cells(line):
@@ -45,10 +59,29 @@ def cells(line):
     Not str.strip('|'): that eats every trailing pipe at once, so a row ending
     in empty cells loses columns and stops looking like a table row at all.
     """
-    line = line.rstrip()
+    line = LINK.sub(r'\1', line.rstrip())
     if not (line.startswith('|') and line.endswith('|')):
         return None
     return [c.strip() for c in line[1:-1].split('|')]
+
+
+def layout(row):
+    """Column indices of coding, range and meaning, read off a header row.
+
+    A row that continues an entry from the previous page has no version cell to
+    measure from, and it is often short as well, because the conversion drops
+    the empty cells at its end. Counting from the left against the header the
+    table repeats is the only thing that stays right for both.
+    """
+    found = []
+    for names in COLUMNS:
+        found.append(next((i for i, c in enumerate(row) if c.startswith(names)), None))
+    return tuple(found) if all(i is not None for i in found) else None
+
+
+def clean(text):
+    """Normalises a value's text and drops the release glued onto its end."""
+    return TRAILING_VERSION.sub('', re.sub(r'\s+', ' ', text).strip())
 
 
 def columns(row):
@@ -68,40 +101,78 @@ def columns(row):
 def extract(path):
     entries = {}
     current = None
+    last_range = ''
+    pages = 0
+    columns_at = None
     with open(path, encoding='utf-8') as fh:
         for line in fh:
             row = cells(line)
             if row is None or len(row) < 3:
-                current = None
+                # A value list that outgrows a page continues in a fresh table
+                # on the next one, under a repeated header. Everything between
+                # the two is layout, so the entry has to survive it -- but only
+                # as far as the next page, or a stray empty first cell much
+                # later in the document would attach itself to it.
+                if line.startswith('<!-- page'):
+                    pages += 1
+                    if pages > 1:
+                        current = None
                 continue
 
             parts = row[0].split('<br>')
             match = TOKEN.match(parts[0])
             if match and any(FRAGMENT.match(p) for p in parts[1:2]):
                 current = match.group(1)
+                pages = 0
             elif current and row[0] == '':
                 # A row that continues the entry above: the reference splits a
                 # long list of values across rows, and dropping them loses the
                 # tail of every enumeration that did not fit on one line.
-                pass
+                pages = 0
+            elif set(''.join(row)) <= set('-'):
+                continue
+            elif row[0] in HEADERS:
+                columns_at = layout(row) or columns_at
+                continue
             else:
                 current = None
                 continue
 
-            entry = entries.setdefault(current, {'desc': '', 'range': '', 'vals': {}})
+            entry = entries.setdefault(current, {'desc': '', 'range': '', 'vals': {}, 'see': ''})
             coding, value_range, description = columns(row)
-            if not any((coding, value_range, description)):
-                # No version cell in a continuation row; the columns still line
-                # up with the header, so read them from the right instead.
-                padded = row[1:] + ['', '', '']
-                coding, value_range, description = padded[1], padded[2], padded[3]
+            if not any((coding, value_range, description)) and columns_at:
+                padded = row + [''] * len(row)
+                coding, value_range, description = (padded[i] for i in columns_at)
 
+            # A value whose text does not fit the column width is broken across
+            # lines, and the tail carries no number of its own. Read on its own
+            # it looks like noise; dropped, it takes the half of the sentence
+            # that says what the code means -- "19 = operating access refused,
+            # because" is worse than no entry at all.
+            value = None
             for part in coding.split('<br>'):
-                m = ENUM.match(part.strip())
+                part = part.strip()
+                m = ENUM.match(part)
                 if m:
-                    entry['vals'].setdefault(int(m.group(1)), m.group(2).strip())
+                    value = int(m.group(1))
+                    entry['vals'].setdefault(value, clean(m.group(2)))
+                    continue
+                reference = SEE.match(part)
+                if reference and not entry['see']:
+                    entry['see'] = reference.group(1)
+                    value = None
+                elif value is not None and part:
+                    entry['vals'][value] = clean(entry['vals'][value] + ' ' + part)
+
+            value_range = value_range.replace('<br>', ' ').strip()
+            if DITTO.match(value_range):
+                # "as above", and above is the previous row unless this entry
+                # defers to another subfunction, which is resolved later.
+                value_range = '' if entry['see'] else last_range
+            elif value_range:
+                last_range = value_range
             if value_range and not entry['range']:
-                entry['range'] = value_range.replace('<br>', ' ').strip()
+                entry['range'] = value_range
             text = description.replace('<br>', ' ').strip()
             if text and text not in entry['desc']:
                 entry['desc'] = (entry['desc'] + ' ' + text).strip()
@@ -109,8 +180,29 @@ def extract(path):
 
 
 def known_tokens(path):
+    """Token codes in the registry, and the code each symbolic name stands for."""
     with open(path, encoding='utf-8') as fh:
-        return {g + t + i for g, t, i in REGISTRY.findall(fh.read())}
+        found = REGISTRY.findall(fh.read())
+    return {g + t + i for g, t, i, _ in found}, {name: g + t + i for g, t, i, name in found}
+
+
+def resolve(entries, by_name):
+    """Follows the "see <other subfunction>" cells.
+
+    The reference codes a value set once and points the rest at it; several
+    hundred subfunctions carry nothing but such a pointer, so an entry that
+    stops here says nothing where the document says plenty. References chain,
+    hence the repeats, and a cycle simply stops making progress.
+    """
+    for _ in range(3):
+        for entry in entries.values():
+            other = entries.get(by_name.get(entry['see'], ''))
+            if other is None or other is entry:
+                continue
+            for value, text in other['vals'].items():
+                entry['vals'].setdefault(value, text)
+            if not entry['range']:
+                entry['range'] = other['range']
 
 
 def quote(text):
@@ -200,11 +292,13 @@ def merge(into, extra):
     the other way round, and taking whole entries would discard the half that
     the first edition happens to be missing."""
     for token, other in extra.items():
-        entry = into.setdefault(token, {'desc': '', 'range': '', 'vals': {}})
+        entry = into.setdefault(token, {'desc': '', 'range': '', 'vals': {}, 'see': ''})
         if not entry['desc']:
             entry['desc'] = other['desc']
         if not entry['range']:
             entry['range'] = other['range']
+        if not entry['see']:
+            entry['see'] = other['see']
         for value, text in other['vals'].items():
             entry['vals'].setdefault(value, text)
 
@@ -221,4 +315,7 @@ if __name__ == '__main__':
     entries = extract(sources[0])
     for source in sources[1:]:
         merge(entries, extract(source))
-    emit(entries, known_tokens(registry[0]))
+
+    tokens, by_name = known_tokens(registry[0])
+    resolve(entries, by_name)
+    emit(entries, tokens)
