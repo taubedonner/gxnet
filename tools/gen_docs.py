@@ -28,8 +28,9 @@ rows are merged, earliest wins for a given value.
 import re
 import sys
 
-CELL0 = re.compile(r'^\*\*([A-Z]{2}[0-9A-F]{2})\*\*(?:<br>([A-Z]{2,4}_[A-Z0-9_]+))?$')
-NAME = re.compile(r'^([A-Z]{2,4}_[A-Z0-9_]+)$')
+TOKEN = re.compile(r'^[\dX#%!?*]?([A-Z]{2}[0-9A-F]{2})$')
+FRAGMENT = re.compile(r'^[#%!?*]?([A-Z][A-Z0-9_]*)$')
+VERSION = re.compile(r'^(\d{1,2})\.(\d{2})\b')
 # "0 = text", and the form that repeats the value unsigned in brackets.
 ENUM = re.compile(r'^(-?\d+)\s*(?:\([^)]*\))?\s*=\s*(.+)$')
 REGISTRY = re.compile(r"Token\{'(\w)', '(\w)', 0x([0-9A-F]{2})\}")
@@ -47,37 +48,59 @@ def cells(line):
     return [c.strip() for c in line[1:-1].split('|')]
 
 
+def columns(row):
+    """Locates the version cell and reads coding, range and description after it.
+
+    The table has a fixed column order but not a fixed column count: the
+    conversion leaves empty separator cells in some rows and not in others, so
+    positions are taken relative to the version rather than from the left edge.
+    """
+    for i, cell in enumerate(row[1:], 1):
+        if VERSION.match(cell):
+            after = row[i + 1:] + ['', '', '']
+            return after[0], after[1], after[2]
+    return '', '', ''
+
+
 def extract(path):
     entries = {}
     current = None
     with open(path, encoding='utf-8') as fh:
         for line in fh:
             row = cells(line)
-            if row is None or len(row) < 5:
+            if row is None or len(row) < 3:
                 current = None
                 continue
 
-            head = CELL0.match(row[0])
-            if head:
-                current = head.group(1)
-                entries.setdefault(current, {'desc': '', 'range': '', 'vals': {}})
-            elif current and (NAME.match(row[0]) or row[0] == ''):
-                pass  # continuation row of the entry above
+            parts = row[0].split('<br>')
+            match = TOKEN.match(parts[0])
+            if match and any(FRAGMENT.match(p) for p in parts[1:2]):
+                current = match.group(1)
+            elif current and row[0] == '':
+                # A row that continues the entry above: the reference splits a
+                # long list of values across rows, and dropping them loses the
+                # tail of every enumeration that did not fit on one line.
+                pass
             else:
                 current = None
                 continue
 
-            entry = entries[current]
-            for part in row[2].split('<br>'):
+            entry = entries.setdefault(current, {'desc': '', 'range': '', 'vals': {}})
+            coding, value_range, description = columns(row)
+            if not any((coding, value_range, description)):
+                # No version cell in a continuation row; the columns still line
+                # up with the header, so read them from the right instead.
+                padded = row[1:] + ['', '', '']
+                coding, value_range, description = padded[1], padded[2], padded[3]
+
+            for part in coding.split('<br>'):
                 m = ENUM.match(part.strip())
                 if m:
                     entry['vals'].setdefault(int(m.group(1)), m.group(2).strip())
-            if row[3] and not entry['range']:
-                entry['range'] = row[3].replace('<br>', ' ').strip()
-            # A description cell that holds nothing but a symbolic name is the
-            # conversion having put the name in the wrong column.
-            text = row[4].replace('<br>', ' ').strip()
-            if text and not NAME.match(text) and text not in entry['desc']:
+            if value_range and not entry['range']:
+                entry['range'] = value_range.replace('<br>', ' ').strip()
+            text = description.replace('<br>', ' ').strip()
+            if text and text not in entry['desc']:
                 entry['desc'] = (entry['desc'] + ' ' + text).strip()
     return entries
 

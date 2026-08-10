@@ -7,7 +7,7 @@ The library is deliberately **transport-free**. It knows how to build, encode, p
 - C++20, no third-party dependencies
 - Reads both the textual form and the binary form found in communication logs
 - Builds as a static library; a C ABI header is provided for embedding
-- 1917 subfunctions with symbolic names and introducing software versions
+- 1922 subfunctions with symbolic names and introducing software versions
 - 407 self-checks across three binaries, no external test framework
 - Clean under AddressSanitizer, UndefinedBehaviorSanitizer and ThreadSanitizer
 
@@ -66,7 +66,7 @@ The library is the part with no dependencies. `link/` speaks to a device through
 | [`docs/bcs-notes.md`](docs/bcs-notes.md) | `_connect.BRAIN`, the COM/DCOM server that carries the telegrams |
 | [`docs/machine-notes.md`](docs/machine-notes.md) | how a GLM installation is wired: channels, outgoing lines, the memory card, unique data |
 
-Every claim in them cites the manual by symbolic name, subfunction code and, where a name is not enough, a chapter and a short German quote – so the originals stay searchable without being redistributed. `gen_registry.py` needs a local copy of `docs/markdown/GxNet.md`, which is gitignored, and `gen_docs.py` builds an optional second table the same way.
+Every claim in them cites the manual by symbolic name, subfunction code and, where a name is not enough, a chapter and a short German quote – so the originals stay searchable without being redistributed. `gen_registry.py` needs a local copy of the reference, converted by `pdf2md.py`; both it and the markdown are gitignored, and `gen_docs.py` builds an optional second table the same way.
 
 ---
 
@@ -380,7 +380,9 @@ Read the answer as a header-plus-data pair and the parser takes the value for a 
 ## Regenerating the registry
 
 ```sh
-python3 tools/gen_registry.py docs/markdown/GxNet.md > core/include/gxnet/detail/registry_table.hpp
+python3 tools/pdf2md.py GxNet_de_de.pdf > docs/markdown/GxNet-de.md
+python3 tools/gen_registry.py docs/markdown/GxNet-de.md docs/markdown/GxNet.md \
+    > core/include/gxnet/detail/registry_table.hpp
 ```
 
 The generator reads the markdown export of the vendor subfunction reference and emits the lookup table. That export is gitignored, so keep a local copy; re-run the generator whenever you receive a newer revision, and nothing else needs to change.

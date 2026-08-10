@@ -1,67 +1,106 @@
 #!/usr/bin/env python3
-"""Extract the GxNet token registry from the vendor reference (markdown export).
+"""Extract the GxNet token registry from the vendor reference.
 
-Usage:  python3 gen_registry.py GxNet.md > ../include/gxnet/detail/registry_table.hpp
+Usage:
+    python3 gen_registry.py GxNet-de.md [GxNet.md] > ../core/include/gxnet/detail/registry_table.hpp
 
-The reference lists each subfunction as a heading holding the 4-character token,
-followed by the symbolic name and (usually) the software version in which the
-subfunction was introduced.  Entries with no description in the source are
-flagged as ``reserved``.
+Reads the markdown produced by tools/pdf2md.py, where each subfunction is a
+table row whose first cell holds the four-character code and the symbolic name.
+The German edition is the primary source because it is the complete one; a
+second file may be given and supplies only what the first does not have.
+
+Three things the conversion does to a name cell, all of which have to be undone
+here, and all of which were found by comparing the result against the previous
+table rather than by reading the PDF:
+
+    2BL08<br>BML_POSITION_...     a digit or marker glued to the front of the
+                                  code, left over from the row above
+    SV5A<br>..._BY_CHANG<br>E     a name wrapped mid-word across two lines
+    GWE0<br>NAME_A<br>NAME_B      a cell that legitimately holds two names,
+                                  where only the first belongs to this code
+
+A continuation is therefore joined only when it contains no underscore: a
+fragment like `E` continues a name, a fragment like `GGW_GEWKLAS_LOK_GLOB` is
+the next name and ends the first.
 """
 
+import json
 import re
 import sys
-import json
 
-TOKEN_RE = re.compile(r'^(?:\*\*|#{1,6}\s*)([A-Z]{2}[0-9A-F]{2})(?:\*\*)?\s*$')
-NAME_RE = re.compile(r'^([A-Z]{2,4}_[A-Z0-9_]+)\s*$')
-VERSION_RE = re.compile(r'^(?:#{1,6}\s*)?(\d{1,2}\.\d{2})\b')
-RESERVED_RE = re.compile(r'\breserved\b', re.IGNORECASE)
+# A leading digit or marker is conversion debris; a code never starts with one.
+TOKEN = re.compile(r'^[\dX#%!?*]?([A-Z]{2}[0-9A-F]{2})$')
+FRAGMENT = re.compile(r'^[#%!?*]?([A-Z][A-Z0-9_]*)$')
+# "12.00", and also "12.00 SP5".
+VERSION = re.compile(r'^(\d{1,2})\.(\d{2})\b')
+# The cell has to start with it, and the whole cell is not required: the
+# reference writes both "reserviert" and "reserviert ab 3.4". Matching the
+# word anywhere instead would catch every description that mentions a reserve.
+RESERVED = re.compile(r'^reserv(ed|iert)\b', re.IGNORECASE)
+
+# Where "reserviert" sits is the coding column, so on its own it says only that
+# no parameter encoding is defined -- which is ordinary for a command that
+# takes none. XCX_DELETE_UNIQUE_DATA is marked that way and is fully described
+# and in daily use. A subfunction counts as reserved only when the reference
+# also says nothing about what it does.
+
+
+def rows(path):
+    with open(path, encoding='utf-8') as fh:
+        for line in fh:
+            line = line.rstrip()
+            if line.startswith('|') and line.endswith('|'):
+                yield [cell.strip() for cell in line[1:-1].split('|')]
+
+
+def name_from(parts):
+    """Joins a name that the page layout broke across lines."""
+    name = ''
+    for part in parts:
+        match = FRAGMENT.match(part)
+        if not match:
+            break
+        piece = match.group(1)
+        if not name:
+            name = piece
+        elif '_' in piece:
+            break
+        else:
+            name += piece
+    return name
 
 
 def extract(path):
-    with open(path, encoding='utf-8') as fh:
-        lines = fh.read().split('\n')
-
     out = {}
-    for i, line in enumerate(lines):
-        m = TOKEN_RE.match(line.strip())
-        if not m:
+    for cells in rows(path):
+        if len(cells) < 2:
             continue
-        token = m.group(1)
+        parts = cells[0].split('<br>')
+        match = TOKEN.match(parts[0])
+        if not match:
+            continue
+        name = name_from(parts[1:])
+        if '_' not in name:
+            continue
 
-        name = ''
         version = ''
-        reserved = False
-        # The name follows within a couple of lines; the version follows the name.
-        for j in range(i + 1, min(i + 8, len(lines))):
-            s = lines[j].strip().lstrip('#').strip()
-            if not s or s == '```':
-                continue
-            if not name:
-                nm = NAME_RE.match(s)
-                if nm:
-                    name = nm.group(1)
-                    continue
-                # A new token heading before a name means this entry has none.
-                if TOKEN_RE.match(lines[j].strip()):
-                    break
-                continue
-            vm = VERSION_RE.match(s)
-            if vm:
-                version = vm.group(1)
-                if RESERVED_RE.search(s):
-                    reserved = True
+        marked = False
+        described = False
+        for i, cell in enumerate(cells[1:], 1):
+            found = VERSION.match(cell)
+            if found and not version:
+                version = f'{found.group(1)}.{found.group(2)}'
+                # Coding, range and description follow the version in order.
+                after = cells[i + 1:] + ['', '', '']
+                marked = bool(RESERVED.match(after[0]))
+                described = bool(after[2].strip())
                 break
-            if TOKEN_RE.match(lines[j].strip()):
-                break
+        reserved = marked and not described
 
-        if not name:
-            continue
-        # Keep the first definition; later ones are cross-references.
-        if token not in out:
-            out[token] = {'token': token, 'name': name,
-                          'version': version, 'reserved': reserved}
+        # The first row wins: later ones repeat the code for a further release.
+        out.setdefault(match.group(1), {
+            'token': match.group(1), 'name': name,
+            'version': version, 'reserved': reserved})
     return out
 
 
@@ -69,7 +108,7 @@ def emit_cpp(entries):
     # Sorted by the token text, which for two upper-case letters followed by two
     # upper-case hex digits is the same order as Token's member-wise <=>. The
     # header static_asserts this rather than trusting it.
-    rows = sorted(entries.values(), key=lambda e: e['token'])
+    rows_out = sorted(entries.values(), key=lambda e: e['token'])
     print('// SPDX-License-Identifier: MIT')
     print('// Generated by tools/gen_registry.py -- do not edit by hand.')
     print('// Source: Bizerba GxNet subfunction reference.')
@@ -94,8 +133,8 @@ def emit_cpp(entries):
     print('namespace detail {')
     print('')
     print('// clang-format off')
-    print('inline constexpr std::array<TokenInfo, %d> kRegistryTable{{' % len(rows))
-    for e in rows:
+    print('inline constexpr std::array<TokenInfo, %d> kRegistryTable{{' % len(rows_out))
+    for e in rows_out:
         token = e['token']
         if e['version']:
             major, minor = e['version'].split('.')
@@ -115,9 +154,17 @@ def emit_cpp(entries):
 
 
 if __name__ == '__main__':
-    src = sys.argv[1]
-    data = extract(src)
-    if len(sys.argv) > 2 and sys.argv[2] == '--json':
+    if len(sys.argv) < 2:
+        print(__doc__, file=sys.stderr)
+        sys.exit(2)
+
+    args = [a for a in sys.argv[1:] if a != '--json']
+    data = extract(args[0])
+    for extra in args[1:]:
+        for token, entry in extract(extra).items():
+            data.setdefault(token, entry)
+
+    if '--json' in sys.argv:
         json.dump(list(data.values()), sys.stdout, indent=1)
     else:
         emit_cpp(data)

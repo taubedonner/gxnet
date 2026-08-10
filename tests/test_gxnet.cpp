@@ -255,7 +255,7 @@ static void testCompileTimeRegistry() {
 
     check(true, "compile-time token lookups resolved");
     checkEq(std::string(unique_data.name), std::string("GGW_UNIQUE_DATEN"), "constexpr entry carries the name");
-    checkEq(Registry::builtin().size(), std::size_t(1917), "1917 entries in the table");
+    checkEq(Registry::builtin().size(), std::size_t(1922), "1922 entries in the table");
 }
 
 static void testEncodeDocumentedExample() {

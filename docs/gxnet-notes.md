@@ -271,6 +271,12 @@ Printed once, on page 2, and used on every page after it.
 
 The `↔` is the one to watch when automating a line with a second printer on it.
 
+### "reserviert" is about the parameters, not the subfunction
+
+The word appears in the *Kodierung der Unterfunktionsparameter* column, so it says that no parameter encoding is defined. It does not say the subfunction is unimplemented, and reading it that way is a mistake worth naming: `XCX_DELETE_UNIQUE_DATA` (**XX13**) is marked `reserviert` and is fully described one column further right, and it is the command this project uses to clear the unique-data buffer.
+
+A command that takes no parameters has nothing to put in that column, which is why so many of them carry the word. The entries that really are undocumented are the ones where the range and the description are empty as well, such as `LGL_START_VALUE` (**LL14**) and `LGV_ERROR_LIST` (**LV02**). `gen_registry.py` sets its `reserved` flag on that combination rather than on the word alone.
+
 ## 7. Batching a changeover: `LGV_SEQUENZ` (LV01)
 
 Permitted contents, printed in both editions: `GG~ | AM~ | XC~ | VM~ | WZV~REMOTE~`. So `GGW_UNIQUE_DATEN`, `XCX_DELETE_UNIQUE_DATA` and `XCV_DBTAB_DATASET` may all travel in one telegram, and a terminal note with them. The SDD family may **not** – only the REMOTE part of W is allowed in.
