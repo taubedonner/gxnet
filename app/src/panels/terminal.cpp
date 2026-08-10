@@ -31,6 +31,7 @@ TerminalPanel::TerminalPanel(wxWindow* parent, Session& session) : Panel(parent,
 
     auto* text_box = new wxStaticBoxSizer(wxVERTICAL, this, "Text");
     wxWindow* tbox = text_box->GetStaticBox();
+    explainToken(tbox, kDisplayText);
 
     text_ = new wxTextCtrl(tbox, wxID_ANY, "gxnet test", wxDefaultPosition, wxSize(-1, 70), wxTE_MULTILINE);
     text_box->Add(text_, 0, wxEXPAND | wxALL, 6);

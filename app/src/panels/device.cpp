@@ -13,17 +13,29 @@ constexpr Token kText1 = knownToken("GGT_SIMPLE_TXT1").token;   // GT61
 constexpr Token kText2 = knownToken("GGT_SIMPLE_TXT2").token;   // GT62
 constexpr Token kText3 = knownToken("GGT_SIMPLE_TXT3").token;   // GT63
 
-/// Plain texts are 11 characters up to 7.61 and 15 from there on, so 15 here.
-/// Characters, not bytes: Cyrillic in UTF-8 runs two bytes to the character,
-/// and a byte check would reject valid text.
-constexpr std::size_t kPlainTextLimit = 15;
+/// Plain texts hold 11 characters, 15 from 7.61 and 30 from 14.60. Characters,
+/// not bytes: Cyrillic in UTF-8 runs two bytes to the character, and a byte
+/// check would reject valid text.
+///
+/// The last step is printed only in the German edition, and a device past 14.60
+/// takes 30 whatever the English one says. Where the release is unknown the
+/// short limit stands: the device does not refuse an over-long text, it prints
+/// a truncated one.
+constexpr std::size_t kPlainTextShort = 15;
+constexpr std::size_t kPlainTextLong = 30;
+constexpr Version kPlainTextLongSince{14, 60};
 
 /// Room for the longest counter the panel can produce, measured in the font
 /// that will actually draw it rather than guessed in pixels -- the widest case
 /// is a full Cyrillic text, two bytes to the character.
 wxSize counterSize(wxWindow* parent) {
-    const wxSize widest = parent->GetTextExtent("15/15 chars, 30 bytes");
+    const wxSize widest = parent->GetTextExtent("30/30 chars, 60 bytes");
     return wxSize(widest.GetWidth() + 8, -1);
+}
+
+/// What this device takes, once its release is known.
+std::size_t plainTextLimit(const std::optional<Version>& device) {
+    return device && *device >= kPlainTextLongSince ? kPlainTextLong : kPlainTextShort;
 }
 
 }  // namespace
@@ -49,8 +61,9 @@ DevicePanel::DevicePanel(wxWindow* parent, Session& session) : Panel(parent, ses
     wxWindow* vbox = version_box->GetStaticBox();
 
     auto* version_row = new wxBoxSizer(wxHORIZONTAL);
-    version_row->Add(new wxStaticText(vbox, wxID_ANY, describeToken(kVersion)), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
-                     12);
+    auto* version_label = new wxStaticText(vbox, wxID_ANY, describeToken(kVersion));
+    explainToken(version_label, kVersion);
+    version_row->Add(version_label, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
 
     auto* read_version = new wxButton(vbox, wxID_ANY, "Read", wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
     version_row->Add(read_version, 0, wxALIGN_CENTER_VERTICAL);
@@ -78,8 +91,9 @@ DevicePanel::DevicePanel(wxWindow* parent, Session& session) : Panel(parent, ses
 
     for (std::size_t i = 0; i < dates_.size(); ++i) {
         auto* row = new wxBoxSizer(wxHORIZONTAL);
-        row->Add(new wxStaticText(dbox, wxID_ANY, describeToken(dates_[i].token)), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
-                 12);
+        auto* label = new wxStaticText(dbox, wxID_ANY, describeToken(dates_[i].token));
+        explainToken(label, dates_[i].token);
+        row->Add(label, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
 
         auto* read = new wxButton(dbox, wxID_ANY, "Read", wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
         row->Add(read, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
@@ -123,16 +137,17 @@ DevicePanel::DevicePanel(wxWindow* parent, Session& session) : Panel(parent, ses
     auto* texts_box = new wxStaticBoxSizer(wxVERTICAL, this, "Plain texts");
     wxWindow* tbox = texts_box->GetStaticBox();
 
-    texts_box->Add(hint(tbox, wxString::Format("GGT_SIMPLE_TXT1..3, up to %zu characters from 7.61 on.\n"
-                                               "On this line they already carry fragments of the applied "
-                                               "unique code, and a write overwrites that.",
-                                               kPlainTextLimit)),
+    texts_box->Add(hint(tbox, wxString::Format("GGT_SIMPLE_TXT1..3, %zu characters from 7.61 on and %zu from %s.\n"
+                                               "A label layout may already be printing them, and a write "
+                                               "replaces whatever is there.",
+                                               kPlainTextShort, kPlainTextLong, kPlainTextLongSince.str().c_str())),
                    0, wxALL, 6);
 
     for (std::size_t i = 0; i < texts_.size(); ++i) {
         auto* row = new wxBoxSizer(wxHORIZONTAL);
-        row->Add(new wxStaticText(tbox, wxID_ANY, describeToken(texts_[i].token)), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT,
-                 12);
+        auto* label = new wxStaticText(tbox, wxID_ANY, describeToken(texts_[i].token));
+        explainToken(label, texts_[i].token);
+        row->Add(label, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
 
         auto* read = new wxButton(tbox, wxID_ANY, "Read", wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
         row->Add(read, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
@@ -173,9 +188,10 @@ DevicePanel::DevicePanel(wxWindow* parent, Session& session) : Panel(parent, ses
         text_edits_[i]->Bind(wxEVT_TEXT, [this, i](wxCommandEvent& event) {
             const std::string value = utf8(text_edits_[i]->GetValue());
             const auto length = utf8Length(value);
-            const bool over = length && *length > kPlainTextLimit;
+            const std::size_t limit = plainTextLimit(session_.deviceVersion());
+            const bool over = length && *length > limit;
             text_counters_[i]->SetLabel(
-                wxString::Format("%zu/%zu chars, %zu bytes", length.value_or(0), kPlainTextLimit, value.size()));
+                wxString::Format("%zu/%zu chars, %zu bytes", length.value_or(0), limit, value.size()));
             text_counters_[i]->SetForegroundColour(over ? kBad : kMuted);
             event.Skip();
         });
@@ -288,9 +304,10 @@ void DevicePanel::writeText(std::size_t index) {
         show(text_values_[index], "not valid UTF-8, refusing to send", kBad);
         return;
     }
-    if (*length > kPlainTextLimit) {
+    const std::size_t limit = plainTextLimit(session_.deviceVersion());
+    if (*length > limit) {
         show(text_values_[index],
-             wxString::Format("%zu characters, limit is %zu, refusing to send", *length, kPlainTextLimit), kBad);
+             wxString::Format("%zu characters, limit is %zu, refusing to send", *length, limit), kBad);
         return;
     }
 

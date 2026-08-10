@@ -13,11 +13,20 @@ struct Suggestion {
 constexpr std::array<Suggestion, 6> kSuggestions{{
     {"A?ST8D", "software version"},
     {"A?GW7D", "unique-data intake state"},
-    {"A?SW9B", "unique buffer readiness, undocumented"},
+    {"A?SW9B", "unique buffer readiness, needs firmware 16.40"},
     {"A?GL06", "date 1"},
     {"A?GT61", "plain text 1"},
-    {"A?MW06|3000", "poll the package buffer, timeout in ms"},
+    {"A?MW06|3000", "poll the package buffer, requested buffer size in bytes"},
 }};
+
+/// The subfunction a tree item stands for, so the tooltip can look it up in the
+/// reference. Values are shown in the label; what they mean does not fit there.
+class TokenItem final : public wxTreeItemData {
+public:
+    explicit TokenItem(Token token) : token(token) {}
+
+    Token token;
+};
 
 }  // namespace
 
@@ -96,6 +105,11 @@ ConsolePanel::ConsolePanel(wxWindow* parent, Session& session) : Panel(parent, s
     input_->Bind(wxEVT_TEXT, [this](wxCommandEvent& event) {
         updatePreview();
         event.Skip();
+    });
+    tree_->Bind(wxEVT_TREE_ITEM_GETTOOLTIP, [this](wxTreeEvent& event) {
+        const auto* item = dynamic_cast<TokenItem*>(tree_->GetItemData(event.GetItem()));
+        if (item == nullptr) return;
+        event.SetToolTip(tokenMeaningText(item->token));
     });
     history_->Bind(wxEVT_LISTBOX, [this](wxCommandEvent& event) {
         if (event.GetSelection() != wxNOT_FOUND) {
@@ -219,7 +233,7 @@ void ConsolePanel::fillTree(const Telegram& telegram) {
                 if (!decoded.empty()) label += "   (" + wx(decoded) + ")";
             }
 
-            const wxTreeItemId item = tree_->AppendItem(parent, label);
+            const wxTreeItemId item = tree_->AppendItem(parent, label, -1, -1, new TokenItem(node.token));
             if (!node.children.empty()) self(self, node.children, item);
         }
     };

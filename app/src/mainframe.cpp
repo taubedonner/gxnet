@@ -59,6 +59,7 @@ MainFrame::MainFrame()
     auto* softkey = new panels::SoftkeyPanel(tabs_, session_);
     auto* ftp = new panels::FtpPanel(tabs_, session_);
     auto* console = new panels::ConsolePanel(tabs_, session_);
+    auto* reference = new panels::ReferencePanel(tabs_, session_);
 
     tabs_->AddPage(connection, "Connection", true);
     tabs_->AddPage(device, "Device");
@@ -70,8 +71,9 @@ MainFrame::MainFrame()
     tabs_->AddPage(softkey, "Softkeys");
     tabs_->AddPage(ftp, "FTP");
     tabs_->AddPage(console, "Console");
+    tabs_->AddPage(reference, "Reference");
 
-    panels_ = {connection, device, unique, plu, buffer, terminal, dialog, softkey, ftp, console};
+    panels_ = {connection, device, unique, plu, buffer, terminal, dialog, softkey, ftp, console, reference};
 
     log_view_ = new panels::LogView(splitter_, session_);
 

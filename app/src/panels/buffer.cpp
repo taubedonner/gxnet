@@ -52,11 +52,13 @@ BufferPanel::BufferPanel(wxWindow* parent, Session& session) : Panel(parent, ses
     controls->Add(interval_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     controls->Add(new wxStaticText(this, wxID_ANY, "s"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16);
 
-    controls->Add(new wxStaticText(this, wxID_ANY, "poll timeout, ms"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
-    poll_timeout_ = new wxSpinCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(90, -1), wxSP_ARROW_KEYS, 0,
-                                   32767, 3000);
-    poll_timeout_->SetToolTip("The word payload of MDW_GET_BUFF, documented as a buffer size in bytes, 0 to 2000.");
-    controls->Add(poll_timeout_, 0, wxALIGN_CENTER_VERTICAL);
+    controls->Add(new wxStaticText(this, wxID_ANY, "buffer size, bytes"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+    buffer_size_ = new wxSpinCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(90, -1), wxSP_ARROW_KEYS, 0,
+                                  32767, 3000);
+    buffer_size_->SetToolTip(
+        "The word payload of MDW_GET_BUFF: the buffer size requested, documented as 0 to 2000. "
+        "The default is 3000 because that is what the vendor's own software sends, outside the documented range.");
+    controls->Add(buffer_size_, 0, wxALIGN_CENTER_VERTICAL);
 
     root->Add(controls, 0, wxALL, 6);
 
@@ -97,7 +99,7 @@ void BufferPanel::poll() {
     status_->SetLabel("polling...");
     status_->SetForegroundColour(kMuted);
 
-    session_.send(link::bufferPoll(static_cast<std::int16_t>(poll_timeout_->GetValue())),
+    session_.send(link::bufferPoll(static_cast<std::int16_t>(buffer_size_->GetValue())),
                   /*expect_reply=*/true, [this](link::LinkResult<link::Exchange> result) {
                       pending_ = false;
 
@@ -107,7 +109,7 @@ void BufferPanel::poll() {
                           return;
                       }
                       if (result->status == link::Status::Timeout) {
-                          status_->SetLabel("no answer within the poll timeout");
+                          status_->SetLabel("no answer within the transport timeout");
                           status_->SetForegroundColour(kBad);
                           return;
                       }

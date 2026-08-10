@@ -22,6 +22,31 @@ wxString describeToken(Token token) {
     return out;
 }
 
+wxString tokenMeaningText(Token token, std::size_t value_limit) {
+    wxString out;
+    const auto line = [&out](const wxString& text) {
+        if (!out.empty()) out += "\n";
+        out += text;
+    };
+
+    if (const auto meaning = tokenMeaning(token)) line(wx(*meaning));
+
+    const auto doc = tokenDoc(token);
+    if (doc && !doc->range.empty()) line("range: " + wx(doc->range));
+
+    const auto values = tokenValues(token);
+    std::size_t shown = 0;
+    for (const TokenValue& value : values) {
+        if (shown == value_limit) {
+            line(wxString::Format("and %zu more", values.size() - shown));
+            break;
+        }
+        line(wxString::Format("%d = %s", value.value, wx(value.text)));
+        ++shown;
+    }
+    return out;
+}
+
 wxString describeValue(const Value& value) {
     if (isEmpty(value)) return "-";
 

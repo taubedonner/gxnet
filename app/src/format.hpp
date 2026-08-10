@@ -4,6 +4,7 @@
 #include <wx/string.h>
 
 #include <chrono>
+#include <cstddef>
 #include <string>
 
 #include "gxnet/gxnet.hpp"
@@ -29,6 +30,11 @@ wxString describeToken(Token token);
 
 /// Symbolic name alone, empty when unknown.
 wxString tokenName(Token token);
+
+/// What the reference says a subfunction is for, with its value range and the
+/// values it names. Empty when the optional table of meanings was not
+/// generated, so every caller has to tolerate that.
+wxString tokenMeaningText(Token token, std::size_t value_limit = 12);
 
 /// Value in wire form, with the decoded quantity appended for a dimension.
 wxString describeValue(const Value& value);

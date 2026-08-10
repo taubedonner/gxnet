@@ -30,6 +30,7 @@ UniquePanel::UniquePanel(wxWindow* parent, Session& session) : Panel(parent, ses
 
     auto* intake_box = new wxStaticBoxSizer(wxVERTICAL, this, "Intake: GGW_UNIQUE_DATEN (GW7D)");
     wxWindow* ibox = intake_box->GetStaticBox();
+    explainToken(ibox, kIntake);
 
     intake_value_ = new wxStaticText(ibox, wxID_ANY, "not read yet");
     intake_value_->SetForegroundColour(kMuted);
@@ -57,11 +58,12 @@ UniquePanel::UniquePanel(wxWindow* parent, Session& session) : Panel(parent, ses
 
     auto* clear_box = new wxStaticBoxSizer(wxVERTICAL, this, "Buffer: XCX_DELETE_UNIQUE_DATA (XX13)");
     wxWindow* cbox = clear_box->GetStaticBox();
+    explainToken(cbox, kClear);
 
     clear_box->Add(hint(cbox,
-                        "Clears the buffered codes. Disable intake first: with intake "
-                        "enabled the machine swallows a dropped file immediately,\n"
-                        "on top of the old buffer."),
+                        "Clears the buffered codes. The reference allows it only while intake "
+                        "is disabled, and with intake enabled\n"
+                        "the machine swallows a dropped file immediately, on top of the old buffer."),
                    0, wxALL, 6);
 
     auto* clear_button = new wxButton(cbox, wxID_ANY, "Clear buffer...");
@@ -75,13 +77,14 @@ UniquePanel::UniquePanel(wxWindow* parent, Session& session) : Panel(parent, ses
 
     auto* ready_box = new wxStaticBoxSizer(wxVERTICAL, this, "Readiness: SRW_UNIQUE_PCK_DATA_READY (SW9B)");
     wxWindow* rbox = ready_box->GetStaticBox();
+    explainToken(rbox, kReady);
 
-    // Undocumented: the reference gives the name and the version and nothing
-    // else. Both readings are plausible and they differ operationally, so the
-    // panel shows the raw value and states what it does not know.
+    // A flag, not a stock level: the reference names both values and neither
+    // counts anything. So the raw value is still shown, because a value outside
+    // 0 and 1 would mean the reading is wrong.
     ready_box->Add(hint(rbox,
-                        "Undocumented, and needs firmware 16.40. The name suggests a "
-                        "readiness flag; it may instead count the codes remaining."),
+                        "Needs firmware 16.40. A readiness flag: 0 the unique data cannot be "
+                        "used, 1 it can.\nIt does not report how many codes are left."),
                    0, wxALL, 6);
 
     ready_value_ = new wxStaticText(rbox, wxID_ANY, "not read yet");
@@ -134,9 +137,9 @@ void UniquePanel::refresh() {
             intake_value_->SetForegroundColour(kGood);
             intake_note_->SetLabel("");
         } else {
-            // The 0/1 meaning came from a Bizerba engineer, not a document.
-            // Anything else is worth showing rather than guessing at.
-            intake_value_->SetLabel(wxString::Format("%d: undocumented value", *state));
+            // The reference gives this one a range of 0 to 1. Anything else is
+            // worth showing rather than guessing at.
+            intake_value_->SetLabel(wxString::Format("%d: outside the documented range", *state));
             intake_value_->SetForegroundColour(kWarn);
             intake_note_->SetLabel("");
         }
@@ -170,8 +173,9 @@ void UniquePanel::clearBuffer() {
         warning += "\n\nIntake state is unknown: it has not been read.";
     } else if (*state != 0) {
         warning +=
-            "\n\nIntake is still ENABLED. Disable it first, or the machine may "
-            "swallow a dropped file on top of the cleared buffer.";
+            "\n\nIntake is still ENABLED. The reference allows the clear only while "
+            "intake is disabled, and the machine may swallow a dropped file on top "
+            "of the cleared buffer.";
     }
 
     if (wxMessageBox(warning, "Clear buffer", wxYES_NO | wxICON_WARNING, this) != wxYES) {
@@ -230,11 +234,9 @@ void UniquePanel::probeReady() {
         ready_value_->SetForegroundColour(wxNullColour);
 
         if (const auto* value = std::get_if<std::int16_t>(&ready_.value)) {
-            wxString note = wxString::Format("as a flag: %s", *value != 0 ? "ready" : "not ready");
+            wxString note = *value != 0 ? "unique data ready" : "unique data not ready";
             if (*value > 1) {
-                note +=
-                    "; greater than 1, so it is not a plain flag, "
-                    "a count is the better reading";
+                note += "; outside the documented 0 / 1, so this reading is not trustworthy";
                 ready_note_->SetForegroundColour(kWarn);
             } else {
                 ready_note_->SetForegroundColour(kMuted);

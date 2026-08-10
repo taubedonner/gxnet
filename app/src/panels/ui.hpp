@@ -27,6 +27,15 @@ inline wxStaticText* hint(wxWindow* parent, const wxString& text) {
     return label;
 }
 
+/// Puts the reference's account of a subfunction on a control as a tooltip.
+///
+/// Does nothing when the table of meanings was not generated, which is the
+/// normal state of a checkout without the vendor reference beside it.
+inline void explainToken(wxWindow* control, Token token) {
+    const wxString text = tokenMeaningText(token);
+    if (!text.empty()) control->SetToolTip(text);
+}
+
 /// A label carrying whatever the device last said.
 ///
 /// It must not resize itself. A wxStaticText sizes to its text the moment

@@ -33,6 +33,7 @@ PluPanel::PluPanel(wxWindow* parent, Session& session) : Panel(parent, session) 
 
     auto* current_box = new wxStaticBoxSizer(wxVERTICAL, this, "Current PLU: GGL_PLUNR (GL19)");
     wxWindow* cbox = current_box->GetStaticBox();
+    explainToken(cbox, kPluNumber);
 
     auto* current_row = new wxBoxSizer(wxHORIZONTAL);
     auto* read = new wxButton(cbox, wxID_ANY, "Read", wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
@@ -52,6 +53,7 @@ PluPanel::PluPanel(wxWindow* parent, Session& session) : Panel(parent, session) 
 
     auto* change_box = new wxStaticBoxSizer(wxVERTICAL, this, "Change to: XCV_DBTAB_DATASET (XV00)");
     wxWindow* bbox = change_box->GetStaticBox();
+    explainToken(bbox, knownToken("XCV_DBTAB_DATASET").token);
 
     auto* number_row = new wxBoxSizer(wxHORIZONTAL);
     number_row->Add(new wxStaticText(bbox, wxID_ANY, "PLU number"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);

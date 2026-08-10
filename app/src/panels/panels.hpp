@@ -320,7 +320,7 @@ private:
     wxListCtrl* packages_ = nullptr;
     wxCheckBox* auto_poll_ = nullptr;
     wxSpinCtrl* interval_ = nullptr;
-    wxSpinCtrl* poll_timeout_ = nullptr;
+    wxSpinCtrl* buffer_size_ = nullptr;
     wxStaticText* status_ = nullptr;
     wxTextCtrl* raw_ = nullptr;
     double since_last_s_ = 0.0;
@@ -402,6 +402,28 @@ private:
     wxTreeCtrl* tree_ = nullptr;
     wxTextCtrl* raw_ = nullptr;
     wxButton* send_ = nullptr;
+};
+
+/// The bundled subfunction table, searchable. The one tab that works with no
+/// device: it answers "what is this token" without opening the reference.
+class ReferencePanel final : public Panel {
+public:
+    ReferencePanel(wxWindow* parent, Session& session);
+
+private:
+    /// Applies the query to the whole table.
+    void refill();
+    /// Puts the selected entry into the detail pane.
+    void showSelected();
+
+    wxTextCtrl* filter_ = nullptr;
+    wxCheckBox* in_meanings_ = nullptr;
+    wxStaticText* count_ = nullptr;
+    wxListBox* list_ = nullptr;
+    wxTextCtrl* detail_ = nullptr;
+
+    /// Tokens behind the visible rows, in the same order.
+    std::vector<Token> shown_;
 };
 
 /// The exchange log, shown below the tabs rather than as one of them.

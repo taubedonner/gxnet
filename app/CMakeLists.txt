@@ -69,6 +69,7 @@ add_executable(gxdemo WIN32
     src/panels/softkey.cpp
     src/panels/ftp.cpp
     src/panels/console.cpp
+    src/panels/reference.cpp
     src/panels/logview.cpp
 )
 
