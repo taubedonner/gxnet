@@ -228,7 +228,7 @@ The single most misleading kind of row in the reference: a limit that is stated 
 | `GGT_STTX1..50` (static texts) | 60, 70 from 14.20 |
 | `WZT_GX_NAME` (WT64) | 35 |
 
-From 13.20 SP3 the simple texts hold **30** characters, not 15; a device below that truncates silently.
+From **14.60** the simple texts hold **30** characters, not 15; a device below that truncates silently. That last step is printed only in the German edition – the English one stops at "as from version 7.61: max. 15 characters" – so a program that trusts the English table refuses half of what a current device accepts. (The 13.20 SP3 in the row above belongs to `GGT_ATX` and its 4000 characters, which is what this line originally confused it with.)
 
 ## 5. Dimensional values: what the packed word means
 
@@ -276,6 +276,14 @@ The `↔` is the one to watch when automating a line with a second printer on it
 The word appears in the *Kodierung der Unterfunktionsparameter* column, so it says that no parameter encoding is defined. It does not say the subfunction is unimplemented, and reading it that way is a mistake worth naming: `XCX_DELETE_UNIQUE_DATA` (**XX13**) is marked `reserviert` and is fully described one column further right, and it is the command this project uses to clear the unique-data buffer.
 
 A command that takes no parameters has nothing to put in that column, which is why so many of them carry the word. The entries that really are undocumented are the ones where the range and the description are empty as well, such as `LGL_START_VALUE` (**LL14**) and `LGV_ERROR_LIST` (**LV02**). `gen_registry.py` sets its `reserved` flag on that combination rather than on the word alone.
+
+### `siehe` and `dto.` carry as much as an explicit table
+
+A coding column reading `siehe GGW_LAND` is not a gap: the reference codes a value set once and points several hundred subfunctions at it. `dto.` in the range column means the same, referred either to that other subfunction or, where there is none, to the row above. `WZW_DISPLAY_ATTRIB` (**WW65**) is the clearest case – it prints nothing at all except `siehe WZW_REMOTE_DISPLAY_ATTR`, and that is where its -1 delete / 0 normal / 1 flashing comes from. `gen_docs.py` follows both, which is worth roughly four hundred named values.
+
+### One description in the English edition is a printing error
+
+`MDW_GET_BUFF` (**MW06**) is described in the English edition as *"End notification that no more data is available"* – which is the description of `MDW_END_OK` (**MW00**), the row above it on the previous page. The German edition has the right one: *"Anfordern von auf der Memo-Card synchron aufgezeichneten Packungsdaten mit impliziter Datenlöschung"*. The difference is not academic, because the implicit deletion is the whole hazard of the command. Checked against both PDFs directly, so it is the vendor's error and not a conversion artefact.
 
 ## 7. Batching a changeover: `LGV_SEQUENZ` (LV01)
 
