@@ -392,8 +392,8 @@ The generator reads the markdown export of the vendor subfunction reference and 
 Names and versions are identifiers and are tracked. What a subfunction is *for* and what its values *mean* is the manual's own prose, so that table is built locally and stays out of the repository:
 
 ```sh
-python3 tools/gen_docs.py docs/markdown/GxNet-de.md \
-    core/include/gxnet/detail/registry_table.hpp \
+python3 tools/gen_docs.py core/include/gxnet/detail/registry_table.hpp \
+    docs/markdown/GxNet.md docs/markdown/GxNet-de.md \
     > core/include/gxnet/detail/registry_docs.hpp
 ```
 
@@ -401,7 +401,7 @@ python3 tools/gen_docs.py docs/markdown/GxNet-de.md \
 
 With the table, `gxlint` names the value beside the number instead of leaving it bare, and `--meaning` adds what each subfunction is for.
 
-Use the German edition. Both editions carry the same date, but the English translation is incomplete; see [`docs/gxnet-notes.md`](docs/gxnet-notes.md).
+The English edition comes first and the German fills its gaps: the two carry the same date and the English one is a partial translation, so about one description in twenty stays German. See [`docs/gxnet-notes.md`](docs/gxnet-notes.md).
 
 ---
 
