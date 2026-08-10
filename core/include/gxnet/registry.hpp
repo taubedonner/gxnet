@@ -17,11 +17,19 @@
 // tools/gen_docs.py from the vendor reference. That reference is not in this
 // repository and neither is the table, so the accessors below are always
 // declared and simply report nothing when it was never generated.
-#if defined(__has_include)
+//
+// The build system may have settled the question already, and when it has, its
+// answer wins: a header that did not exist when a translation unit was first
+// compiled is in none of its dependencies, so only something on the command
+// line makes an incremental build notice that it exists now.
+#if !defined(GXNET_HAS_TOKEN_DOCS) && defined(__has_include)
 #if __has_include("gxnet/detail/registry_docs.hpp")
-#include "gxnet/detail/registry_docs.hpp"
 #define GXNET_HAS_TOKEN_DOCS 1
 #endif
+#endif
+
+#ifdef GXNET_HAS_TOKEN_DOCS
+#include "gxnet/detail/registry_docs.hpp"
 #endif
 
 namespace gxnet {
