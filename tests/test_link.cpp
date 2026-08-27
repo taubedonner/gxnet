@@ -303,10 +303,9 @@ void testCompositeTelegrams() {
         checkEq(poll->at(1), std::string("3000"), "carrying the timeout in ms");
     }
 
-    // Without the deduced field: the shape to try when the device answers an
-    // internal error and draws an empty box.
-    // The default, and the only form the device accepts: measured on 15.61,
-    // a dialog carrying WW62 is refused and one without it renders.
+    // Without the deduced field. The default, and the only form the device
+    // accepts: measured on 15.61, a dialog carrying WW62 is refused and draws
+    // an empty box, and the same one without it renders its text.
     auto without = encodeLines(confirmDialog(1, "Check", "Continue?"));
     if (without) {
         checkEq(without->at(0), std::string("A!WV60|WW60|WW61|WT60|WV62|WW63|WT62|WW65|LX02|LX02"),

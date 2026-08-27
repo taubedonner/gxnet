@@ -94,12 +94,11 @@ DialogPanel::DialogPanel(wxWindow* parent, Session& session) : Panel(parent, ses
     wxWindow* fbox = fields_box->GetStaticBox();
 
     elem_count_ = new wxCheckBox(fbox, wxID_ANY, "WZW_SDD_ELEM_COUNT (WW62, deduced)");
-    elem_count_->SetValue(true);
     elem_count_->SetToolTip(
-        "The reference names the field but its coding table leaves 0x62 "
-        "unnamed. WW62 is the slot the field order\n"
-        "points at, and nothing else nearby is a counting variable. Turn it "
-        "off to see whether the device prefers it absent.");
+        "Off, because the device draws the window only without it. The "
+        "reference names the field but its coding\n"
+        "table leaves 0x62 unnamed, so WW62 was a deduction from the field "
+        "order; a dialog carrying it is refused.");
     fields_box->Add(elem_count_, 0, wxALL, 4);
 
     with_active_ = new wxCheckBox(fbox, wxID_ANY, "WZW_SDD_ELEM_ACTIVE (WW69)");
