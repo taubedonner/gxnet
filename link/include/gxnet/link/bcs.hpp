@@ -37,38 +37,24 @@ public:
         /// bound is there so a device stuck on status 2 cannot hang the thread.
         int max_receive_rounds = 256;
 
-        /// What `SendOne` expects between the header and the data.
-        ///
-        /// Unverified. The server splits the single string in
-        /// CConvDataToBxNetBase::SeperteHeaderData and the manual never says on
-        /// what, so CR/LF is the reasonable guess and nothing more. Prefer
-        /// `Send`, which takes the two parts separately and needs no guessing.
+        /// What `SendOne` expects between the header and the data. Unverified:
+        /// the manual never says, so CR/LF is a guess and nothing more. Prefer
+        /// `Send`, which takes the two parts separately. See `Request::one_line`.
         std::string send_one_separator = "\r\n";
 
         /// Ask the server how the device wants text (`IsUnicodeDevice`) when
         /// the connection opens, and report it through textMode().
         ///
-        /// On by default. It briefly looked responsible for a failed send --
-        /// the message named the Unicode query -- but the device was simply
-        /// switched off, and the server says the same thing whenever nobody
-        /// answers. Kept because the setting decides how text is escaped, and
+        /// On by default, because the setting decides how text is escaped and
         /// getting that wrong shows up as a mangled label rather than an error.
+        /// The method is undocumented in both directions -- `Get-Member` prints
+        /// `int IsUnicodeDevice (short)` and nothing says whether that short is
+        /// in or out -- so this passes it by reference, which may well be wrong.
         ///
-        /// The earlier symptom, for the record. With it on, a send failed with
-        ///
-        ///     Senden der Anfrage der Unicodeeinstellung des Geraetes
-        ///     fehlgeschlagen  (DISP_E_EXCEPTION)
-        ///
-        /// -- the server's own words for "could not ask the device about its
-        /// Unicode setting", i.e. exactly what this probe asks for. The method
-        /// is undocumented: `Get-Member` prints `int IsUnicodeDevice (short)`
-        /// and nothing says whether that short is in or out, so calling it with
-        /// a by-ref short may well be wrong and may leave the server holding a
-        /// failed query.
-        ///
-        /// If it ever does misbehave, SRW_UNICODE_DEVICE (SW85) answers the
-        /// same question with an ordinary telegram, so this can be turned off
-        /// without losing the information.
+        /// SRW_UNICODE_DEVICE (SW85) answers the same question with an ordinary
+        /// telegram, so this can be turned off without losing the information.
+        /// See `docs/bcs-notes.md`, *An unreachable device does not look like a
+        /// timeout*, for the failure it once looked responsible for and was not.
         bool probe_text_mode = true;
     };
 

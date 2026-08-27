@@ -14,10 +14,8 @@
 /// Transport layer: what carries a telegram to a device and back.
 ///
 /// The library proper contains no transport, deliberately. This layer adds one,
-/// and it does so through the vendor's own server rather than by speaking to
-/// the device directly -- the connection layer below the telegrams is
-/// undocumented (post-connect info message, back-synchronisation, bus
-/// addressing, licence check) and `_connect.BRAIN` already implements it.
+/// and it goes through the vendor's own server rather than speaking to the
+/// device directly; the reasoning is at `BcsTransport`.
 ///
 /// What travels across this interface is a Telegram, not bytes. That is not a
 /// simplification: the vendor manual states that commands and data are
@@ -101,18 +99,11 @@ struct Request {
     /// Interleaved single-line form (`SendOne`) versus separate header and data
     /// lines (`Send`).
     ///
-    /// `Send` by default, settled by the server's own log rather than
-    /// preference. `SendOne` has been seen to fail with
-    ///
-    ///     2712 (BCS_GX) Telegrammaufbau ist fehlerhaft
-    ///     source: CConvDataToBxNetBase::SeperteHeaderData
-    ///
-    /// -- "separate header data": the server takes the single string apart into
-    /// a header and a data part, and our interleaved encoding gives it nothing
-    /// to split on. `Send` hands over the two parts already separated, so that
-    /// step does not arise. What `SendOne` actually wants between them is not
-    /// documented; `BcsTransport::Options::send_one_separator` is the guess,
-    /// and it is a guess.
+    /// `Send` by default: it hands the two parts over already separated, while
+    /// `SendOne` splits the single string itself and an interleaved telegram
+    /// gives it nothing to split on. What it wants between the parts is
+    /// undocumented; `BcsTransport::Options::send_one_separator` is a guess.
+    /// See `docs/bcs-notes.md`, *Use `Send`, not `SendOne`*.
     bool one_line = false;
 };
 
@@ -220,7 +211,7 @@ public:
     /// The queue the server files spontaneous records under when the client has
     /// not made one of its own. Not a description of what happened to them: it
     /// is the literal handle to pass to a receive method. See
-    /// `docs/bcs-notes.md`, section 1.
+    /// `docs/bcs-notes.md`, *Collecting what belongs to no request*.
     static constexpr const char* kDefaultQueue = "DUSTBIN";
 
     /// Collects one record the device sent of its own accord, if one is waiting.

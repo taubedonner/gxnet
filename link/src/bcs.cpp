@@ -279,7 +279,8 @@ public:
     /// `ReceiveOne`'s `szHandle` reads as a send handle, but the description of
     /// `ReceiveOneWithoutAck` gives the same parameter a second meaning: a
     /// queue name. The two differ only in who acknowledges, so it means the
-    /// same in both. See `docs/bcs-notes.md`, section 1 for the passages.
+    /// same in both. See `docs/bcs-notes.md`, *Collecting what belongs to no
+    /// request*, for the passages.
     ///
     /// `ReceiveOne` is the one used here because it acknowledges by itself: an
     /// unacknowledged record leaves the device waiting, and on a labelling line

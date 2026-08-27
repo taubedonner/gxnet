@@ -59,25 +59,17 @@ namespace gxnet::link {
 
 /// LGW_DEBUG, decoded. Empty when the code cannot be taken apart this way.
 ///
-/// The reference prints an appendix of several thousand internal error codes
-/// and then, on its last pages, prints the rule they are built from: every
-/// module is given a base, and a fixed set of offsets from that base always
-/// means the same thing.
+/// The reference prints an appendix of several thousand internal error codes,
+/// and then the rule they are built from: every module is given a base, and a
+/// fixed set of offsets from that base always means the same thing. The
+/// appendix does not print every code, so the rule reaches codes the list
+/// skips. The offsets, and the case that established this, are in
+/// `docs/gxnet-notes.md`, *Internal error codes are built from a published
+/// rule*.
 ///
-///     +1 overflow   +2 underflow   +3 data error   +4 initialisation
-///     +5 function not available    +6 fatal manager error   +7 invalid id
-///     +10 invalid handle  +15 memory  +19 parameter  +22 timeout   ...
-///
-/// That matters because the appendix does not print every code -- it prints the
-/// ones somebody bothered to list. The input-tool group runs 17701, 17702, then
-/// jumps to 17715, and the dialogs were refused with **17705**, in the gap. By
-/// the published rule that is 17700 + 5, "function not available".
-///
-/// Which was true and misleading at once: the function was unavailable *for the
-/// field set being sent*. Removing the one deduced field made the same dialog
-/// render. Read a decode as a description of the refusal, never as a verdict on
-/// the command -- and the device is no help here either, its own error resource
-/// has no text for 17705.
+/// Read a decode as a description of the refusal, never as a verdict on the
+/// command: "function not available" turned out to mean unavailable *for the
+/// field set being sent*.
 ///
 /// Only groups whose base is a round hundred and whose printed entries follow
 /// the scheme are decoded here. Everything else returns empty rather than a
@@ -87,18 +79,12 @@ namespace gxnet::link {
 /// The data line to send for a telegram that has no record of its own.
 ///
 /// A read is a header and nothing else: that is what the reference describes
-/// and what the codec produces. BCS wants more than that. Its parser rejects an
-/// empty field for a D, L or W command, and says so three times over:
-///
-///     2713  Datenwert fuer ein Kommando ist keine Zahl
-///     2721  Die Zeichenfolgen '| |' bzw. '||' sind nicht erlaubt
-///     2718  Der fehlerhafte Datensatz wird in einer der naechsten Versionen
-///           von _connect.BRAIN nicht mehr toleriert
-///
-/// The last one is the reason this exists: it goes through today under a
-/// compatibility mode the server says it is going to withdraw. Sending a zero
-/// costs nothing, because the direction is `?` and the value in a read is not
-/// what the device answers with.
+/// and what the codec produces. BCS wants more than that -- its parser rejects
+/// an empty field for a D, L or W command, and tolerates it today only under a
+/// compatibility mode it says it will withdraw. Sending a zero costs nothing,
+/// because the direction is `?` and the value in a read is not what the device
+/// answers with. The server's own wording is in `docs/bcs-notes.md`, *Fill the
+/// data field of a read*.
 ///
 /// Text fields are left empty; the server's complaint names D, L and W only.
 /// Dimension fields are left empty too, and that is a known gap: a placeholder
@@ -142,12 +128,8 @@ namespace gxnet::link {
 /// A **read**, and that is the entire content of this function. The command
 /// carries a timeout in milliseconds as its word payload, which makes it look
 /// like a write, and sent as one the device answers LGW_RETURN 2154,
-/// "communication error". A polling client appears in the device commlog as
-///
-///     9077 0102  D106 0BB8
-///
-/// where the leading 0x90 is `?` and 0xD0 is `!`. Same payload, other
-/// direction.
+/// "communication error". See `docs/bcs-notes.md`, *Direction can be the whole
+/// bug*.
 ///
 /// **Reading the buffer deletes what it returns.** The reference describes the
 /// command as "transfer of package data and implicit deletion of this
@@ -201,14 +183,11 @@ struct DialogItem {
 /// A standard dialog, spelled out field by field.
 ///
 /// Every optional and every deduced part of WZV_SDD_START is a member here,
-/// because for a long time the device refused the telegram and the reason was
-/// not known: LGW_RETURN 1 with LGW_DEBUG 0x4529, an input-tool error the
-/// reference's own list skips over, and an empty window on the terminal.
-///
-/// **Settled by varying it.** The offending field was WZW_SDD_ELEM_COUNT, whose
-/// token code was a deduction rather than a reading. Without it the dialog
-/// renders correctly. The knobs stay, because the answer to the next question
-/// came the same way.
+/// because that is how the telegram was made to work at all: the device refused
+/// it until the offending field -- WZW_SDD_ELEM_COUNT, whose token code was a
+/// deduction rather than a reading -- was left out. The knobs stay, because the
+/// answer to the next question is likely to come the same way.
+/// `docs/gxnet-notes.md` has the refusal and how it was read.
 struct DialogSpec {
     /// WZW_SDD_TYP. 7 = selection, 8 = display with confirmation, 9 = display
     /// only. The lower types need numeric or alphanumeric input elements, whose
@@ -322,16 +301,14 @@ enum class SoftkeyType : std::int16_t {
 
 /// One programmable key in the terminal's "TERMINAL" authorisation level.
 ///
-/// This is the other way to ask the operator something, and on this device it
-/// is the way that works. `WZV_SDD_START` comes back refused with an internal
-/// code that decodes to "function not available" (see `internalErrorText`),
-/// while `WZV_REMOTE_DISPLAY` -- the note, same subsystem as this -- is
-/// verified against the live line. The softkey family is 6.21, needs no handle
-/// that we have to invent, and its answer arrives as `WZV_SOFTKEY_TO_REMOTE`.
+/// The other way to ask the operator something, and the alternative to a
+/// dialog rather than a fallback from one: 6.21, no handle to invent, and the
+/// answer arrives as `WZV_SOFTKEY_TO_REMOTE`. A softkey is a key on a row, not
+/// a modal window, so it cannot state a question at length -- pair it with a
+/// terminal note for the text and use the key for the answer.
 ///
-/// The trade against a dialog: a softkey is a key on a row, not a modal window,
-/// so it cannot state a question at length. Pair it with a terminal note for
-/// the text and use the key for the answer.
+/// `docs/gxnet-notes.md`, *Programmable softkeys*, has the full field table and
+/// what "TERMINAL level" means.
 struct SoftkeySpec {
     /// WZW_REMOTE_SOFTKEY_NR, 1 to 16 (1 to 12 on a GD). **Leaving it out is
     /// not a no-op**: the reference says the properties then apply to every
@@ -423,20 +400,16 @@ struct SoftkeyInput {
 /// SRV_NET_KONF_ADDON_PSV_PCK (SV5B, 14.00): read which subfunctions travel
 /// with PSV_PCK, and on which channels.
 ///
-/// This is the "Add.data to PSV_PCK" setting of the outgoing-lines menu, the
-/// one that decides whether a value written on the master reaches a secondary
-/// printer. It is readable over the interface, which saves a trip to the
-/// terminal and an authorisation level.
-///
+/// The "Add.data to PSV_PCK" setting of the outgoing-lines menu, the one that
+/// decides whether a value written on the master reaches a secondary printer.
 /// The answer is a list of `SRV_UFKENN_CHANNEL_INFO` pairs: a subfunction code
-/// (LGW_UFKENN) and a channel bitmap (SRL_NET_CHANNEL_BITMAP, bit 0 internal,
-/// bit 1 channel A, up to bit 11 channel K).
+/// (LGW_UFKENN) and a channel bitmap (SRL_NET_CHANNEL_BITMAP).
 ///
 /// **The matching write, SV6B, is not built here on purpose.** It replaces the
-/// whole list rather than adding to it, and the reference has a dedicated
-/// locking error for getting the channel or the identifier wrong --
-/// 30150, which stops labelling. A read costs nothing; a wrong write stops the
-/// line.
+/// whole list rather than adding to it, and getting the channel or identifier
+/// wrong locks the device -- error 30150, which stops labelling. A read costs
+/// nothing; a wrong write stops the line. See `docs/machine-notes.md`, *The
+/// outgoing-lines configuration is readable and writable over the wire*.
 [[nodiscard]] Telegram addonPsvPckQuery();
 
 }  // namespace gxnet::link
